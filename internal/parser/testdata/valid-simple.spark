@@ -1,0 +1,11 @@
+name: simple-suite
+tests:
+  - name: health-check
+    execution:
+      target: http://api:8080
+      request:
+        method: GET
+        url: /health
+    assertions:
+      - statusCode:
+          equals: 200

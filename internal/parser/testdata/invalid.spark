@@ -1,0 +1,3 @@
+name: [invalid yaml
+  this is not valid:
+    - missing closing bracket

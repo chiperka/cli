@@ -1,0 +1,9 @@
+name: env-suite
+tests:
+  - name: env-test
+    execution:
+      target: $SPARK_TEST_TARGET
+      request:
+        method: GET
+        url: /api/$SPARK_TEST_PATH
+    assertions: []

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Spark" tests="1" failures="0" errors="0" skipped="0" time="0.843">
+  <testsuite name="auth-suite" tests="1" failures="0" errors="0" skipped="0" time="0.843" timestamp="__TIMESTAMP__" file="tests/auth.spark">
+    <testcase name="login-success" classname="auth-suite" time="0.843" file="tests/auth.spark" assertions="2"></testcase>
+  </testsuite>
+</testsuites>

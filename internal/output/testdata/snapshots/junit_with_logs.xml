@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Spark" tests="1" failures="0" errors="0" skipped="0" time="0.5">
+  <testsuite name="log-suite" tests="1" failures="0" errors="0" skipped="0" time="0.5" timestamp="__TIMESTAMP__" file="tests/logs.spark">
+    <testcase name="test-with-logs" classname="log-suite" time="0.5" file="tests/logs.spark">
+      <system-out>[0.001s] Pulling Docker image&#xA;[0.500s] [api] Service is healthy&#xA;[0.800s] Status code equals 200</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>

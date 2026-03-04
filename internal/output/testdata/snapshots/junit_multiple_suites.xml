@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Spark" tests="4" failures="1" errors="0" skipped="0" time="1.15">
+  <testsuite name="auth-suite" tests="2" failures="0" errors="0" skipped="0" time="0.8" timestamp="__TIMESTAMP__" file="tests/auth.spark">
+    <testcase name="login" classname="auth-suite" time="0.3" file="tests/auth.spark"></testcase>
+    <testcase name="register" classname="auth-suite" time="0.5" file="tests/auth.spark"></testcase>
+  </testsuite>
+  <testsuite name="api-suite" tests="2" failures="1" errors="0" skipped="0" time="0.35" timestamp="__TIMESTAMP__" file="tests/api.spark">
+    <testcase name="get-users" classname="api-suite" time="0.2" file="tests/api.spark"></testcase>
+    <testcase name="create-user" classname="api-suite" time="0.15" file="tests/api.spark" assertions="1">
+      <failure message="status 201 expected" type="AssertionError">status 201 expected&#xA;  Expected: 201&#xA;  Actual:   500</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

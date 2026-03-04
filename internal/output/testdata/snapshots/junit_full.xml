@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Spark" tests="4" failures="2" errors="1" skipped="1" time="3.255">
+  <testsuite name="full-suite" tests="4" failures="1" errors="1" skipped="1" time="3.255" timestamp="__TIMESTAMP__" file="tests/full.spark">
+    <testcase name="passing-test" classname="full-suite" time="0.843" file="tests/full.spark" assertions="2">
+      <system-out>[0.000s] Creating test network&#xA;[0.650s] [api] Service is healthy&#xA;[0.840s] Status code equals 200</system-out>
+    </testcase>
+    <testcase name="failing-test" classname="full-suite" time="0.412" file="tests/full.spark" assertions="2">
+      <failure message="$.name equals John" type="AssertionError">$.name equals John&#xA;  Expected: John&#xA;  Actual:   Jane</failure>
+      <system-out>[0.000s] GET /api/users/1&#xA;[0.410s] $.name equals John</system-out>
+    </testcase>
+    <testcase name="error-test" classname="full-suite" time="2" file="tests/full.spark">
+      <error message="container startup failed: image not found" type="Error">container startup failed: image not found</error>
+      <system-err>container startup failed: image not found</system-err>
+    </testcase>
+    <testcase name="skipped-test" classname="full-suite" time="0" file="tests/full.spark">
+      <skipped></skipped>
+    </testcase>
+  </testsuite>
+</testsuites>

@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>full-test - Spark Test Report</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #030712;
+            --bg-card: #111827;
+            --bg-elevated: #1f2937;
+            --bg-code: #0a0a0a;
+            --border: #1f2937;
+            --border-subtle: #374151;
+            --text-heading: #ffffff;
+            --text-body: #d1d5db;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --accent: #f97316;
+            --accent-light: #fb923c;
+            --accent-bg: rgba(249, 115, 22, 0.1);
+            --accent-border: rgba(249, 115, 22, 0.25);
+            --pass: #4ade80;
+            --pass-bg: rgba(74, 222, 128, 0.1);
+            --fail: #f87171;
+            --fail-bg: rgba(248, 113, 113, 0.1);
+            --error-color: #fbbf24;
+            --error-bg: rgba(251, 191, 36, 0.1);
+            --skip: #64748b;
+            --skip-bg: rgba(100, 116, 139, 0.1);
+            --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: var(--font-sans); background: var(--bg-base); color: var(--text-body); line-height: 1.6; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+        .container { max-width: 960px; margin: 0 auto; padding: 3rem 2rem; }
+        h2 { font-size: 1.5rem; margin-bottom: 1rem; color: var(--text-heading); font-weight: 700; }
+        h3 { font-size: 1.125rem; margin-bottom: 0.75rem; color: var(--text-heading); font-weight: 700; }
+        code, pre { font-family: var(--font-mono); }
+        a { color: var(--accent-light); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+         
+        .header { border-bottom: 1px solid var(--border); padding-bottom: 2rem; margin-bottom: 2rem; }
+        .brand { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; }
+        .brand-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+        .brand-icon svg { width: 16px; height: 16px; fill: white; }
+        .brand-text { font-size: 0.875rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
+        .back-link { margin-left: auto; font-size: 0.8rem; font-weight: 500; color: var(--text-muted); }
+        .back-link:hover { color: var(--accent-light); }
+        .test-title { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+        .test-title h1 { font-size: 1.75rem; font-weight: 700; color: var(--text-heading); line-height: 1.3; }
+        .status-badge { display: inline-block; padding: 0.2rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .status-badge.passed { background: var(--pass-bg); color: var(--pass); border: 1px solid rgba(74,222,128,0.2); }
+        .status-badge.failed { background: var(--fail-bg); color: var(--fail); border: 1px solid rgba(248,113,113,0.2); }
+        .status-badge.error { background: var(--error-bg); color: var(--error-color); border: 1px solid rgba(251,191,36,0.2); }
+        .status-badge.skipped { background: var(--skip-bg); color: var(--skip); border: 1px solid rgba(100,116,139,0.2); }
+        .description { color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.7; }
+        .tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
+        .tag { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 500; background: var(--accent-bg); color: var(--accent-light); border: 1px solid var(--accent-border); }
+        .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
+        .meta-item { display: flex; flex-direction: column; gap: 0.15rem; }
+        .meta-label { font-size: 0.7rem; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+        .meta-value { font-size: 0.875rem; color: var(--text-body); font-family: var(--font-mono); }
+        .error-box { background: var(--fail-bg); border: 1px solid rgba(248,113,113,0.25); border-radius: 8px; padding: 1rem 1.25rem; font-family: var(--font-mono); font-size: 0.8rem; color: var(--fail); white-space: pre-wrap; word-break: break-word; margin-bottom: 1.5rem; }
+        .section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 1.25rem; overflow: hidden; }
+        .section > summary { display: flex; align-items: center; gap: 0.75rem; padding: 1rem 1.25rem; cursor: pointer; user-select: none; list-style: none; font-weight: 700; font-size: 1rem; color: var(--text-heading); }
+        .section > summary::-webkit-details-marker { display: none; }
+        .section > summary::before { content: ''; display: inline-block; width: 0; height: 0; border-left: 5px solid var(--text-muted); border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform 0.2s; flex-shrink: 0; }
+        .section[open] > summary::before { transform: rotate(90deg); }
+        .section > summary .section-dur { margin-left: auto; font-weight: 400; font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono); }
+        .section > summary .section-count { font-weight: 400; font-size: 0.8rem; color: var(--text-muted); }
+        .section-body { padding: 0 1.25rem 1.25rem; }
+        .http-method { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; font-family: var(--font-mono); font-size: 0.75rem; }
+        .http-method.method-get { background: rgba(96,165,250,0.15); color: #60a5fa; }
+        .http-method.method-post { background: rgba(74,222,128,0.15); color: #4ade80; }
+        .http-method.method-put, .http-method.method-patch { background: rgba(167,139,250,0.15); color: #a78bfa; }
+        .http-method.method-delete { background: rgba(248,113,113,0.15); color: #f87171; }
+        .http-method.method-other { background: rgba(148,163,184,0.15); color: #94a3b8; }
+        .status-code { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; font-family: var(--font-mono); font-size: 0.8rem; }
+        .status-code.success { background: rgba(74,222,128,0.15); color: #4ade80; }
+        .status-code.redirect { background: rgba(251,191,36,0.15); color: #fbbf24; }
+        .status-code.client-error { background: rgba(248,113,113,0.15); color: #f87171; }
+        .status-code.server-error { background: rgba(220,38,38,0.2); color: #ef4444; }
+        .exit-code { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; font-family: var(--font-mono); font-size: 0.8rem; }
+        .exit-code.success { background: rgba(74,222,128,0.15); color: #4ade80; }
+        .exit-code.error { background: rgba(248,113,113,0.15); color: #f87171; }
+        .code-block { background: var(--bg-code); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-body); overflow-x: auto; white-space: pre-wrap; word-break: break-word; max-height: 400px; overflow-y: auto; }
+        .code-block.compact { padding: 0.5rem 0.75rem; font-size: 0.75rem; }
+        .svc-card { background: var(--bg-code); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.75rem; overflow: hidden; }
+        .svc-card:last-child { margin-bottom: 0; }
+        .svc-header { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; }
+        .svc-icon { width: 32px; height: 32px; background: var(--bg-elevated); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.875rem; flex-shrink: 0; }
+        .svc-info { flex: 1; min-width: 0; }
+        .svc-name { font-weight: 600; color: var(--text-heading); font-size: 0.9rem; }
+        .svc-image { color: var(--text-muted); font-size: 0.75rem; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .svc-dur { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted); flex-shrink: 0; }
+        .svc-details { padding: 0 1rem 0.75rem; }
+        .svc-detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.75rem; font-size: 0.8rem; }
+        .svc-detail-label { color: var(--text-muted); font-size: 0.75rem; padding: 0.2rem 0; }
+        .svc-detail-value { color: var(--text-body); font-family: var(--font-mono); font-size: 0.75rem; padding: 0.2rem 0; word-break: break-all; }
+        .svc-section-title { font-size: 0.7rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 0.5rem 0 0.25rem; grid-column: 1 / -1; border-top: 1px solid var(--border); margin-top: 0.25rem; }
+        .svc-section-title:first-child { border-top: none; margin-top: 0; }
+        .env-table { width: 100%; font-size: 0.75rem; font-family: var(--font-mono); border-collapse: collapse; }
+        .env-table td { padding: 0.2rem 0.5rem; border-bottom: 1px solid var(--border); }
+        .env-table td:first-child { color: var(--accent-light); white-space: nowrap; }
+        .env-table td:last-child { color: var(--text-body); word-break: break-all; }
+        .env-table tr:last-child td { border-bottom: none; }
+        .phase-row { display: flex; justify-content: space-between; padding: 0.2rem 0; font-size: 0.75rem; color: var(--text-secondary); }
+        .phase-row-label { display: flex; align-items: center; gap: 0.4rem; }
+        .phase-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text-muted); }
+        .phase-row-dur { font-family: var(--font-mono); color: var(--text-muted); }
+        .setup-step { background: var(--bg-code); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.75rem; }
+        .setup-step:last-child { margin-bottom: 0; }
+        .setup-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+        .setup-icon { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; flex-shrink: 0; }
+        .setup-icon.passed { background: var(--pass-bg); color: var(--pass); }
+        .setup-icon.failed { background: var(--fail-bg); color: var(--fail); }
+        .setup-type { font-weight: 600; font-size: 0.85rem; color: var(--text-heading); }
+        .setup-dur { margin-left: auto; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted); }
+        .setup-body { padding-left: 2.25rem; }
+        .exchange { margin-top: 0.5rem; }
+        .exchange-label { font-size: 0.7rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; margin-top: 0.5rem; }
+        .exchange-line { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-body); margin-bottom: 0.25rem; }
+        .headers-list { font-family: var(--font-mono); font-size: 0.75rem; max-height: 150px; overflow-y: auto; }
+        .header-line { padding: 0.1rem 0; }
+        .header-name { color: var(--accent-light); }
+        .header-val { color: var(--text-secondary); }
+        .exec-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.4rem 1rem; font-size: 0.85rem; align-items: baseline; }
+        .exec-label { color: var(--text-muted); font-size: 0.8rem; white-space: nowrap; }
+        .exec-value { color: var(--text-body); font-family: var(--font-mono); font-size: 0.8rem; word-break: break-all; }
+        .exec-divider { grid-column: 1 / -1; border-top: 1px solid var(--border); margin: 0.4rem 0; }
+        .assert-item { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem 1rem; background: var(--bg-code); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem; }
+        .assert-item:last-child { margin-bottom: 0; }
+        .assert-icon { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; flex-shrink: 0; margin-top: 0.1rem; }
+        .assert-icon.passed { background: var(--pass-bg); color: var(--pass); }
+        .assert-icon.failed { background: var(--fail-bg); color: var(--fail); }
+        .assert-body { flex: 1; min-width: 0; }
+        .assert-msg { font-weight: 500; font-size: 0.85rem; color: var(--text-heading); margin-bottom: 0.15rem; }
+        .assert-detail { font-size: 0.75rem; color: var(--text-secondary); font-family: var(--font-mono); }
+        .assert-dur { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; }
+        .artifact-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+        .artifact-row:last-child { border-bottom: none; }
+        .artifact-row a { color: var(--accent-light); font-family: var(--font-mono); font-size: 0.8rem; }
+        .artifact-size { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.75rem; margin-left: auto; }
+        .phase-timeline { padding: 1rem 0; }
+        .phase-bar { display: flex; height: 20px; border-radius: 4px; overflow: hidden; background: var(--bg-elevated); margin-bottom: 0.75rem; }
+        .phase-segment { height: 100%; min-width: 2px; transition: opacity 0.15s; }
+        .phase-segment:hover { opacity: 0.8; }
+        .phase-network { background: #6366f1; }
+        .phase-services { background: #3b82f6; }
+        .phase-setup { background: #8b5cf6; }
+        .phase-execution { background: #f59e0b; }
+        .phase-assertions { background: #10b981; }
+        .phase-cleanup { background: #64748b; }
+        .phase-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+        .phase-legend-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-secondary); }
+        .phase-legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+        .phase-legend-dur { font-family: var(--font-mono); color: var(--text-body); }
+        .log-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; font-family: var(--font-mono); }
+        .log-table th { text-align: left; padding: 0.4rem 0.5rem; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border-subtle); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .log-table td { padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+        .log-time { color: var(--text-muted); white-space: nowrap; }
+        .log-level { font-weight: 600; font-size: 0.65rem; padding: 0.1rem 0.35rem; border-radius: 3px; text-transform: uppercase; }
+        .log-level.info { background: rgba(96,165,250,0.12); color: #60a5fa; }
+        .log-level.pass { background: rgba(74,222,128,0.12); color: #4ade80; }
+        .log-level.fail { background: rgba(248,113,113,0.12); color: #f87171; }
+        .log-level.warn { background: rgba(251,191,36,0.12); color: #fbbf24; }
+        .log-action { color: #a78bfa; }
+        .log-service { color: var(--text-secondary); }
+        .log-message { color: var(--text-body); word-break: break-word; }
+        .footer { text-align: center; padding: 2.5rem 0 1rem; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); margin-top: 1rem; }
+        .empty { text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem; }
+        @media print {
+            body { background: white; color: #1a1a1a; }
+            .section { border-color: #e5e7eb; background: white; }
+            .section > summary::before { border-left-color: #6b7280; }
+            .code-block { background: #f9fafb; border-color: #e5e7eb; }
+            .footer { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="brand">
+                <div class="brand-icon"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+                <span class="brand-text">Spark Test Report</span>
+                <a href="../index.html" class="back-link">&#8592; Back to Summary</a>
+            </div>
+            <div class="test-title">
+                <h1>full-test</h1>
+                <span class="status-badge passed">PASSED</span>
+            </div>
+            <p class="description">A comprehensive test exercising all features</p>
+            <div class="tags"><span class="tag">smoke</span><span class="tag">api</span></div>
+            <div class="meta-grid">
+                <div class="meta-item"><span class="meta-label">Suite</span><span class="meta-value">full-suite</span></div>
+                <div class="meta-item"><span class="meta-label">File</span><span class="meta-value">tests/full.spark</span></div>
+                <div class="meta-item"><span class="meta-label">Duration</span><span class="meta-value">3.500s</span></div>
+                <div class="meta-item"><span class="meta-label">Run at</span><span class="meta-value">__GENERATED_AT__</span></div>
+            </div>
+        </div>
+
+        
+
+        <details class="section" open>
+            <summary>Services <span class="section-count">(2)</span><span class="section-dur">2.800s</span></summary>
+            <div class="section-body">
+            
+                
+                <div class="svc-card">
+                    <div class="svc-header">
+                        <div class="svc-icon">&#9881;</div>
+                        <div class="svc-info">
+                            <div class="svc-name">db</div>
+                            <div class="svc-image">postgres:15</div>
+                        </div>
+                        <div class="svc-dur">1.800s</div>
+                    </div>
+                    
+                    <div class="svc-details">
+                        <div class="svc-detail-grid">
+                            
+                            
+                        </div>
+                        
+                        <div class="svc-section-title">Environment</div>
+                        <table class="env-table"><tr><td>POSTGRES_PASSWORD</td><td>secret</td></tr></table>
+                        
+                        
+                        <div class="svc-section-title">Health Check</div>
+                        <div class="svc-detail-grid">
+                            <div class="svc-detail-label">Test</div><div class="svc-detail-value">pg_isready</div>
+                            <div class="svc-detail-label">Interval</div><div class="svc-detail-value">1s</div>
+                            <div class="svc-detail-label">Timeout</div><div class="svc-detail-value">3s</div>
+                            <div class="svc-detail-label">Retries</div><div class="svc-detail-value">30</div>
+                        </div>
+                        
+                        
+                        <div class="svc-section-title">Phase Breakdown</div>
+                        <div class="phase-row"><div class="phase-row-label"><span class="phase-dot"></span> Image resolve</div><div class="phase-row-dur">0.100s</div></div>
+                        <div class="phase-row"><div class="phase-row-label"><span class="phase-dot"></span> Container start</div><div class="phase-row-dur">0.500s</div></div>
+                        <div class="phase-row"><div class="phase-row-label"><span class="phase-dot"></span> Healthcheck wait</div><div class="phase-row-dur">1.200s</div></div>
+                        
+                    </div>
+                    
+                </div>
+                
+                <div class="svc-card">
+                    <div class="svc-header">
+                        <div class="svc-icon">&#9881;</div>
+                        <div class="svc-info">
+                            <div class="svc-name">api</div>
+                            <div class="svc-image">myapp:latest</div>
+                        </div>
+                        <div class="svc-dur">1.000s</div>
+                    </div>
+                    
+                    <div class="svc-details">
+                        <div class="svc-detail-grid">
+                            
+                            
+                        </div>
+                        
+                        <div class="svc-section-title">Environment</div>
+                        <table class="env-table"><tr><td>DATABASE_URL</td><td>postgres://db:5432/test</td></tr></table>
+                        
+                        
+                        <div class="svc-section-title">Health Check</div>
+                        <div class="svc-detail-grid">
+                            <div class="svc-detail-label">Test</div><div class="svc-detail-value">curl -f http://localhost:8080/health</div>
+                            
+                            
+                            <div class="svc-detail-label">Retries</div><div class="svc-detail-value">30</div>
+                        </div>
+                        
+                        
+                        <div class="svc-section-title">Phase Breakdown</div>
+                        <div class="phase-row"><div class="phase-row-label"><span class="phase-dot"></span> Image resolve</div><div class="phase-row-dur">0.050s</div></div>
+                        <div class="phase-row"><div class="phase-row-label"><span class="phase-dot"></span> Container start</div><div class="phase-row-dur">0.300s</div></div>
+                        <div class="phase-row"><div class="phase-row-label"><span class="phase-dot"></span> Healthcheck wait</div><div class="phase-row-dur">0.650s</div></div>
+                        
+                    </div>
+                    
+                </div>
+                
+            
+            </div>
+        </details>
+
+        <details class="section" open>
+            <summary>Setup <span class="section-count">(2)</span><span class="section-dur">0.400s</span></summary>
+            <div class="section-body">
+            
+                
+                <div class="setup-step">
+                    <div class="setup-header">
+                        <div class="setup-icon passed">&#10003;</div>
+                        <span class="setup-type">HTTP</span>
+                        <span class="http-method method-post">POST</span>
+                        <span class="setup-dur">0.200s</span>
+                    </div>
+                    <div class="setup-body">
+                        
+                            <div class="exchange-line"><span class="http-method method-post">POST</span> http://api:8080/seed</div>
+                            
+                            <div class="exchange">
+                                
+                                
+                                <div class="exchange-label">Response</div>
+                                <div class="exchange-line"><span class="status-code success">200</span></div>
+                                
+                                <div class="exchange-label">Response Body</div><div class="code-block compact">{&#34;seeded&#34;:true}</div>
+                            </div>
+                            
+                        
+                        
+                    </div>
+                </div>
+                
+                <div class="setup-step">
+                    <div class="setup-header">
+                        <div class="setup-icon passed">&#10003;</div>
+                        <span class="setup-type">CLI</span>
+                        
+                        <span class="setup-dur">0.200s</span>
+                    </div>
+                    <div class="setup-body">
+                        
+                            <div style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:0.25rem;">db</div>
+                            <div class="code-block compact">psql -c &#39;SELECT 1&#39;</div>
+                            
+                            
+                            <div class="exchange">
+                                <div class="exchange-label">Exit Code</div>
+                                <span class="exit-code success">0</span>
+                                <div class="exchange-label">Stdout</div><div class="code-block compact"> ?column? 
+----------
+        1
+(1 row)</div>
+                                
+                            </div>
+                            
+                        
+                        
+                    </div>
+                </div>
+                
+            
+            </div>
+        </details>
+
+        <details class="section" open>
+            <summary>Execution<span class="section-dur">0.150s</span></summary>
+            <div class="section-body">
+                
+                <div class="exec-grid">
+                    <div class="exec-label">Target</div>
+                    <div class="exec-value">http://api:8080</div>
+                    <div class="exec-label">Request</div>
+                    <div class="exec-value"><span class="http-method method-post">POST</span> /api/login</div>
+                    
+                    <div class="exec-label">Headers</div>
+                    <div class="exec-value"><div class="headers-list"><div class="header-line"><span class="header-name">Content-Type:</span> <span class="header-val">application/json</span></div></div></div>
+                    
+                    
+                    <div class="exec-label">Body</div>
+                    <div class="exec-value"><div class="code-block compact">{&#34;email&#34;:&#34;test@example.com&#34;,&#34;password&#34;:&#34;secret&#34;}</div></div>
+                    
+                </div>
+                
+                <div class="exec-divider"></div>
+                <div class="exec-grid">
+                    <div class="exec-label">Status</div>
+                    <div class="exec-value"><span class="status-code success">200</span></div>
+                    
+                    <div class="exec-label">Headers</div>
+                    <div class="exec-value"><div class="headers-list"><div class="header-line"><span class="header-name">Content-Type:</span> <span class="header-val">application/json</span></div></div></div>
+                    
+                    
+                    <div class="exec-label">Body</div>
+                    <div class="exec-value"><a href="../artifacts/response-body.json" target="_blank">response-body.json</a> <span style="color:var(--text-muted);font-size:0.75rem;">42 B</span></div>
+                    
+                </div>
+                
+                
+                <div class="exec-divider"></div>
+                <div class="exchange-label">Response Headers</div><div class="headers-list"><div class="header-line"><span class="header-name">Content-Type:</span> <span class="header-val">application/json</span></div></div>
+                <div class="exchange-label">Response Body</div><div class="code-block">{&#34;token&#34;:&#34;eyJhbGciOiJIUzI1NiJ9&#34;}</div>
+                
+                
+            </div>
+        </details>
+
+        <details class="section" open>
+            <summary>Assertions <span class="section-count">(2)</span><span class="section-dur">0.005s</span></summary>
+            <div class="section-body">
+            
+                
+                <div class="assert-item">
+                    <div class="assert-icon passed">&#10003;</div>
+                    <div class="assert-body">
+                        <div class="assert-msg">Status code equals 200</div>
+                        
+                        <div class="assert-detail">
+                            Expected: 200
+                             | Actual: 200
+                        </div>
+                        
+                    </div>
+                    <div class="assert-dur">0.002s</div>
+                </div>
+                
+                <div class="assert-item">
+                    <div class="assert-icon passed">&#10003;</div>
+                    <div class="assert-body">
+                        <div class="assert-msg">$.token exists</div>
+                        
+                        <div class="assert-detail">
+                            Expected: exists
+                             | Actual: eyJhbGciOiJIUzI1NiJ9
+                        </div>
+                        
+                    </div>
+                    <div class="assert-dur">0.003s</div>
+                </div>
+                
+            
+            </div>
+        </details>
+
+        <details class="section">
+            <summary>Artifacts <span class="section-count">(1)</span></summary>
+            <div class="section-body">
+            
+                
+                <div class="artifact-row">
+                    <a href="../artifacts/error.log" target="_blank">error.log</a>
+                    <span class="artifact-size">1.2 KB</span>
+                </div>
+                
+            
+            </div>
+        </details>
+
+        <details class="section">
+            <summary>Performance</summary>
+            <div class="section-body">
+            
+                <div class="phase-timeline">
+                    <div class="phase-bar">
+                        <div class="phase-segment phase-network" style="width:2.3%" title="Network: 0.080s"></div><div class="phase-segment phase-services" style="width:80.0%" title="Services: 2.800s"></div><div class="phase-segment phase-setup" style="width:11.4%" title="Setup: 0.400s"></div><div class="phase-segment phase-execution" style="width:4.3%" title="Execution: 0.150s"></div><div class="phase-segment phase-assertions" style="width:0.5%" title="Assertions: 0.005s"></div><div class="phase-segment phase-cleanup" style="width:1.9%" title="Cleanup: 0.065s"></div>
+                    </div>
+                    <div class="phase-legend">
+                        <div class="phase-legend-item"><span class="phase-legend-dot phase-network"></span><span>Network</span><span class="phase-legend-dur">0.080s</span></div><div class="phase-legend-item"><span class="phase-legend-dot phase-services"></span><span>Services</span><span class="phase-legend-dur">2.800s</span></div><div class="phase-legend-item"><span class="phase-legend-dot phase-setup"></span><span>Setup</span><span class="phase-legend-dur">0.400s</span></div><div class="phase-legend-item"><span class="phase-legend-dot phase-execution"></span><span>Execution</span><span class="phase-legend-dur">0.150s</span></div><div class="phase-legend-item"><span class="phase-legend-dot phase-assertions"></span><span>Assertions</span><span class="phase-legend-dur">0.005s</span></div><div class="phase-legend-item"><span class="phase-legend-dot phase-cleanup"></span><span>Cleanup</span><span class="phase-legend-dur">0.065s</span></div>
+                    </div>
+                </div>
+            
+            
+                <div style="margin-top:1rem;">
+                    <div style="font-size:0.8rem; font-weight:600; color:var(--text-heading); margin-bottom:0.5rem;">Event Log (6)</div>
+                    <table class="log-table">
+                        <thead><tr><th>Time</th><th>Level</th><th>Action</th><th>Service</th><th>Message</th></tr></thead>
+                        <tbody>
+                            
+                            <tr>
+                                <td class="log-time">0.000s</td>
+                                <td><span class="log-level info">info</span></td>
+                                <td class="log-action">network.create</td>
+                                <td class="log-service"></td>
+                                <td class="log-message">Creating test network</td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="log-time">0.080s</td>
+                                <td><span class="log-level info">info</span></td>
+                                <td class="log-action">service.start</td>
+                                <td class="log-service">db</td>
+                                <td class="log-message">Starting postgres:15</td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="log-time">1.880s</td>
+                                <td><span class="log-level pass">pass</span></td>
+                                <td class="log-action">service.healthy</td>
+                                <td class="log-service">db</td>
+                                <td class="log-message">Service is healthy</td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="log-time">2.880s</td>
+                                <td><span class="log-level pass">pass</span></td>
+                                <td class="log-action">service.healthy</td>
+                                <td class="log-service">api</td>
+                                <td class="log-message">Service is healthy</td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="log-time">3.280s</td>
+                                <td><span class="log-level info">info</span></td>
+                                <td class="log-action">test.execute</td>
+                                <td class="log-service"></td>
+                                <td class="log-message">POST /api/login</td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="log-time">3.430s</td>
+                                <td><span class="log-level pass">pass</span></td>
+                                <td class="log-action">assertion.pass</td>
+                                <td class="log-service"></td>
+                                <td class="log-message">Status code equals 200</td>
+                            </tr>
+                            
+                        </tbody>
+                    </table>
+                </div>
+            
+            
+            </div>
+        </details>
+
+        <div class="footer">Generated by Spark Test Runner &middot; __GENERATED_AT__</div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Spark" tests="1" failures="1" errors="0" skipped="0" time="0.412">
+  <testsuite name="api-suite" tests="1" failures="1" errors="0" skipped="0" time="0.412" timestamp="__TIMESTAMP__" file="tests/api.spark">
+    <testcase name="validate-response" classname="api-suite" time="0.412" file="tests/api.spark" assertions="3">
+      <failure message="Expected status code 200, got 404" type="AssertionError">Expected status code 200, got 404&#xA;  Expected: 200&#xA;  Actual:   404&#xA;&#xA;Body mismatch&#xA;  Expected: ok&#xA;  Actual:   not found</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spark Test Report</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #030712;
+            --bg-card: #111827;
+            --bg-elevated: #1f2937;
+            --bg-code: #0a0a0a;
+            --border: #1f2937;
+            --border-subtle: #374151;
+            --text-heading: #ffffff;
+            --text-body: #d1d5db;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --accent: #f97316;
+            --accent-light: #fb923c;
+            --accent-bg: rgba(249, 115, 22, 0.1);
+            --accent-border: rgba(249, 115, 22, 0.25);
+            --pass: #4ade80;
+            --pass-bg: rgba(74, 222, 128, 0.1);
+            --fail: #f87171;
+            --fail-bg: rgba(248, 113, 113, 0.1);
+            --error-color: #fbbf24;
+            --error-bg: rgba(251, 191, 36, 0.1);
+            --skip: #64748b;
+            --skip-bg: rgba(100, 116, 139, 0.1);
+            --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: var(--font-sans); background: var(--bg-base); color: var(--text-body); line-height: 1.6; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+        .container { max-width: 960px; margin: 0 auto; padding: 3rem 2rem; }
+        a { color: var(--accent-light); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+         
+        .header { border-bottom: 1px solid var(--border); padding-bottom: 2rem; margin-bottom: 2rem; }
+        .brand { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; }
+        .brand-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+        .brand-icon svg { width: 16px; height: 16px; fill: white; }
+        .brand-text { font-size: 0.875rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
+        .header h1 { font-size: 1.75rem; font-weight: 700; color: var(--text-heading); margin-bottom: 0.5rem; }
+        .header-meta { color: var(--text-secondary); font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
+        .header-meta strong { color: var(--accent-light); }
+
+         
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 2rem; }
+        .stat { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; text-align: center; }
+        .stat-val { font-size: 2rem; font-weight: 700; font-family: var(--font-mono); margin-bottom: 0.1rem; }
+        .stat-label { font-size: 0.7rem; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+        .stat.total .stat-val { color: var(--text-heading); }
+        .stat.passed .stat-val { color: var(--pass); }
+        .stat.failed .stat-val { color: var(--fail); }
+        .stat.skipped .stat-val { color: var(--skip); }
+        .stat.rate .stat-val { color: var(--accent-light); }
+
+         
+        .progress { width: 100%; height: 6px; background: var(--bg-elevated); border-radius: 3px; margin-bottom: 2rem; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--pass), #22c55e); border-radius: 3px; transition: width 0.5s ease; }
+
+         
+        .suite { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 1.25rem; overflow: hidden; }
+        .suite-head { padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+        .suite-name { font-size: 1rem; font-weight: 700; color: var(--text-heading); }
+        .suite-path { color: var(--text-muted); font-size: 0.75rem; margin-top: 0.15rem; font-family: var(--font-mono); }
+        .suite-badges { display: flex; gap: 0.5rem; align-items: center; }
+        .badge { padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
+        .badge.passed { background: var(--pass-bg); color: var(--pass); }
+        .badge.failed { background: var(--fail-bg); color: var(--fail); }
+        .badge.skipped { background: var(--skip-bg); color: var(--skip); }
+
+         
+        .test-row { display: flex; align-items: center; padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border); transition: background 0.15s; }
+        .test-row:last-child { border-bottom: none; }
+        .test-row:hover { background: rgba(255,255,255,0.02); }
+        .test-row a { text-decoration: none; color: inherit; display: flex; align-items: center; width: 100%; }
+        .test-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-right: 0.75rem; }
+        .test-dot.passed { background: var(--pass); }
+        .test-dot.failed { background: var(--fail); }
+        .test-dot.error { background: var(--error-color); }
+        .test-dot.skipped { background: var(--skip); }
+        .test-name { font-weight: 500; font-size: 0.9rem; color: var(--text-heading); flex: 1; }
+        .test-tags { display: inline-flex; gap: 0.3rem; margin-left: 0.5rem; }
+        .tag { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 9999px; font-size: 0.6rem; font-weight: 500; background: var(--accent-bg); color: var(--accent-light); border: 1px solid var(--accent-border); }
+        .test-right { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; margin-left: 1rem; }
+        .test-dur { color: var(--text-muted); font-size: 0.8rem; font-family: var(--font-mono); }
+        .test-badge { padding: 0.15rem 0.5rem; border-radius: 9999px; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+        .test-badge.passed { background: var(--pass-bg); color: var(--pass); }
+        .test-badge.failed { background: var(--fail-bg); color: var(--fail); }
+        .test-badge.error { background: var(--error-bg); color: var(--error-color); }
+        .test-badge.skipped { background: var(--skip-bg); color: var(--skip); }
+        .test-arrow { color: var(--text-muted); font-size: 0.7rem; }
+
+         
+        .footer { text-align: center; padding: 2.5rem 0 1rem; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); margin-top: 1rem; }
+
+        @media print {
+            body { background: white; color: #1a1a1a; }
+            .suite { border-color: #e5e7eb; background: white; }
+            .stat { border-color: #e5e7eb; background: white; }
+            .footer { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="brand">
+                <div class="brand-icon"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+                <span class="brand-text">Spark Test Report</span>
+            </div>
+            <h1>Test Run Summary</h1>
+            <div class="header-meta">
+                <span>__GENERATED_AT__</span>
+                <span>Duration: __DURATION__</span>
+                <span>v1.0.0</span>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat total"><div class="stat-val">3</div><div class="stat-label">Total Tests</div></div>
+            <div class="stat passed"><div class="stat-val">3</div><div class="stat-label">Passed</div></div>
+            <div class="stat failed"><div class="stat-val">0</div><div class="stat-label">Failed</div></div>
+            <div class="stat skipped"><div class="stat-val">0</div><div class="stat-label">Skipped</div></div>
+            <div class="stat rate"><div class="stat-val">100%</div><div class="stat-label">Pass Rate</div></div>
+        </div>
+
+        <div class="progress">
+            <div class="progress-fill" style="width: 100%"></div>
+        </div>
+
+        
+        <div class="suite">
+            <div class="suite-head">
+                <div>
+                    <div class="suite-name">auth-suite</div>
+                    <div class="suite-path">tests/auth.spark</div>
+                </div>
+                <div class="suite-badges">
+                    <span class="badge passed">3 passed</span>
+                    
+                    
+                </div>
+            </div>
+            
+            <div class="test-row">
+                <a href="uuid-1/index.html">
+                <div class="test-dot passed"></div>
+                <span class="test-name">login</span>
+                <div class="test-right">
+                    <span class="test-dur">0.500s</span>
+                    <span class="test-badge passed">PASSED</span>
+                    <span class="test-arrow">&#9656;</span>
+                </div>
+                </a>
+            </div>
+            
+            <div class="test-row">
+                <a href="uuid-2/index.html">
+                <div class="test-dot passed"></div>
+                <span class="test-name">register</span>
+                <div class="test-right">
+                    <span class="test-dur">0.800s</span>
+                    <span class="test-badge passed">PASSED</span>
+                    <span class="test-arrow">&#9656;</span>
+                </div>
+                </a>
+            </div>
+            
+            <div class="test-row">
+                <a href="uuid-3/index.html">
+                <div class="test-dot passed"></div>
+                <span class="test-name">logout</span>
+                <div class="test-right">
+                    <span class="test-dur">0.200s</span>
+                    <span class="test-badge passed">PASSED</span>
+                    <span class="test-arrow">&#9656;</span>
+                </div>
+                </a>
+            </div>
+            
+        </div>
+        
+
+        <div class="footer">Generated by Spark Test Runner v1.0.0 &middot; __GENERATED_AT__</div>
+    </div>
+</body>
+</html>

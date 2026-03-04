@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Spark" tests="2" failures="0" errors="0" skipped="1" time="0.1">
+  <testsuite name="misc-suite" tests="2" failures="0" errors="0" skipped="1" time="0.1" timestamp="__TIMESTAMP__" file="tests/misc.spark">
+    <testcase name="disabled-test" classname="misc-suite" time="0" file="tests/misc.spark">
+      <skipped></skipped>
+    </testcase>
+    <testcase name="active-test" classname="misc-suite" time="0.1" file="tests/misc.spark"></testcase>
+  </testsuite>
+</testsuites>

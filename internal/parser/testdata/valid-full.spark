@@ -1,0 +1,31 @@
+name: full-suite
+tests:
+  - name: login-test
+    tags:
+      - smoke
+      - api
+    services:
+      - name: api
+        image: myapp:latest
+        environment:
+          DB_URL: postgres://db:5432/test
+        healthcheck:
+          test: "curl -f http://localhost:8080/health"
+          retries: 30
+    setup:
+      - http:
+          target: http://api:8080
+          request:
+            method: POST
+            url: /seed
+    execution:
+      target: http://api:8080
+      request:
+        method: POST
+        url: /api/login
+        headers:
+          Content-Type: application/json
+        body: '{"email": "test@example.com"}'
+    assertions:
+      - statusCode:
+          equals: 200
