@@ -2,11 +2,14 @@
 package cloud
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"spark-cli/internal/model"
@@ -132,6 +135,120 @@ func (c *Client) StopRun(runID string) error {
 		return fmt.Errorf("failed to stop run: %w", err)
 	}
 	defer resp.Body.Close()
+	return nil
+}
+
+// DownloadReport downloads a report file from a completed run.
+// Format must be "xml" (downloads report.xml to outputPath).
+func (c *Client) DownloadReport(runID, format, outputPath string) error {
+	var endpoint string
+	switch format {
+	case "xml":
+		endpoint = fmt.Sprintf("/api/runs/%s/report.xml", runID)
+	default:
+		return fmt.Errorf("unsupported report format: %s", format)
+	}
+
+	req, err := http.NewRequest("GET", c.baseURL+endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create report request: %w", err)
+	}
+	c.setAuth(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to download report: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Ensure parent directory exists
+	if dir := filepath.Dir(outputPath); dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("failed to create output directory: %w", err)
+		}
+	}
+
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		return fmt.Errorf("failed to write report: %w", err)
+	}
+
+	return nil
+}
+
+// DownloadHTMLReportZip downloads the HTML report as a ZIP and extracts it to outputDir.
+func (c *Client) DownloadHTMLReportZip(runID, outputDir string) error {
+	endpoint := fmt.Sprintf("/api/runs/%s/report.zip", runID)
+
+	req, err := http.NewRequest("GET", c.baseURL+endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create report request: %w", err)
+	}
+	c.setAuth(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to download report: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Read entire ZIP into memory
+	zipData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read report: %w", err)
+	}
+
+	// Open ZIP archive
+	zr, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
+	if err != nil {
+		return fmt.Errorf("failed to open zip: %w", err)
+	}
+
+	// Extract all files
+	for _, f := range zr.File {
+		target := filepath.Join(outputDir, f.Name)
+
+		// Ensure parent directory exists
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return fmt.Errorf("failed to create directory for %s: %w", f.Name, err)
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open zip entry %s: %w", f.Name, err)
+		}
+
+		outFile, err := os.Create(target)
+		if err != nil {
+			rc.Close()
+			return fmt.Errorf("failed to create file %s: %w", target, err)
+		}
+
+		if _, err := io.Copy(outFile, rc); err != nil {
+			outFile.Close()
+			rc.Close()
+			return fmt.Errorf("failed to extract %s: %w", f.Name, err)
+		}
+
+		outFile.Close()
+		rc.Close()
+	}
+
 	return nil
 }
 

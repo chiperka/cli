@@ -240,7 +240,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Warn about flags that have no effect in cloud mode
 	if cloudMode {
 		ignoredInCloud := []string{
-			"html", "junit", "artifacts", "regenerate-snapshots",
+			"artifacts", "regenerate-snapshots",
 			"verbose", "debug", "timeout", "workers", "json",
 		}
 		for _, flag := range ignoredInCloud {
@@ -516,14 +516,39 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		return fmt.Errorf("stream error: %w", err)
 	}
 
+	// Download HTML report if requested
+	if htmlOutput != "" {
+		if err := os.RemoveAll(htmlOutput); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to clean HTML output directory: %v\n", err)
+		}
+		if err := os.MkdirAll(htmlOutput, 0o755); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to create HTML output directory: %v\n", err)
+		} else if err := client.DownloadHTMLReportZip(resp.ID, htmlOutput); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to download HTML report: %v\n", err)
+		} else {
+			fmt.Printf("HTML report written to %s\n", filepath.Join(htmlOutput, "index.html"))
+		}
+	}
+
+	// Download JUnit report if requested
+	if junitOutput != "" {
+		if err := client.DownloadReport(resp.ID, "xml", junitOutput); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to download JUnit report: %v\n", err)
+		} else {
+			fmt.Printf("JUnit report written to %s\n", junitOutput)
+		}
+	}
+
 	// Record telemetry
 	total := result.Passed + result.Failed + result.Skipped
 	telemetry.RecordRun(telemetry.RunParams{
-		Version:       Version,
-		DurationMs:    time.Since(startTime).Milliseconds(),
-		CloudMode:     true,
-		HasTagsFilter: len(filterTags) > 0,
-		HasNameFilter: filterName != "",
+		Version:        Version,
+		DurationMs:     time.Since(startTime).Milliseconds(),
+		CloudMode:      true,
+		HasHTMLReport:  htmlOutput != "",
+		HasJUnitReport: junitOutput != "",
+		HasTagsFilter:  len(filterTags) > 0,
+		HasNameFilter:  filterName != "",
 	}, total, result.Passed, result.Failed, result.Skipped, len(tests.Suites))
 
 	// Print link
