@@ -1,84 +1,111 @@
 package cloud
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"sync"
 	"testing"
+
+	"spark-cli/internal/events"
 )
 
-// --- progressReporter ---
+// eventRecorder captures events emitted on a bus.
+type eventRecorder struct {
+	mu     sync.Mutex
+	events []*events.Event
+}
 
-func TestStream_ProgressReporter_Snapshot(t *testing.T) {
-	var buf bytes.Buffer
-	reporter := &progressReporter{
-		out:        &buf,
-		testNames:  make(map[int64]string),
-		totalTests: 0,
+func (r *eventRecorder) handler(e *events.Event) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, e)
+}
+
+func (r *eventRecorder) ofType(t events.Type) []*events.Event {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []*events.Event
+	for _, e := range r.events {
+		if e.Type == t {
+			out = append(out, e)
+		}
 	}
+	return out
+}
+
+// --- SSEAdapter ---
+
+func TestAdapter_Snapshot(t *testing.T) {
+	bus := events.NewBus()
+	rec := &eventRecorder{}
+	bus.OnAll(rec.handler)
+	adapter := NewSSEAdapter(bus)
 
 	snap := snapshotRun{
 		ID: "run-1",
 		Suites: []snapshotSuite{
-			{Tests: []snapshotTest{
+			{Name: "suite-a", Tests: []snapshotTest{
 				{ID: 1, Name: "test-one", Status: "pending"},
 				{ID: 2, Name: "test-two", Status: "pending"},
 			}},
 		},
 	}
 	data, _ := json.Marshal(snap)
-	reporter.handleEvent(SSEEvent{Event: "snapshot", Data: data})
+	adapter.HandleEvent(SSEEvent{Event: "snapshot", Data: data})
 
-	if reporter.totalTests != 2 {
-		t.Errorf("expected 2 total tests, got %d", reporter.totalTests)
+	if adapter.testNames[1] != "test-one" {
+		t.Errorf("expected test-one, got %q", adapter.testNames[1])
 	}
-	if reporter.testNames[1] != "test-one" {
-		t.Errorf("expected test-one, got %q", reporter.testNames[1])
+	if adapter.testNames[2] != "test-two" {
+		t.Errorf("expected test-two, got %q", adapter.testNames[2])
 	}
-	if reporter.testNames[2] != "test-two" {
-		t.Errorf("expected test-two, got %q", reporter.testNames[2])
+
+	started := rec.ofType(events.RunStarted)
+	if len(started) != 1 {
+		t.Fatalf("expected 1 RunStarted event, got %d", len(started))
+	}
+	if tests, ok := started[0].Data.Details["tests"].(int); !ok || tests != 2 {
+		t.Errorf("expected 2 tests in RunStarted, got %v", started[0].Data.Details["tests"])
 	}
 }
 
-func TestStream_ProgressReporter_SnapshotWithCompleted(t *testing.T) {
-	var buf bytes.Buffer
-	reporter := &progressReporter{
-		out:        &buf,
-		testNames:  make(map[int64]string),
-		totalTests: 0,
-	}
+func TestAdapter_SnapshotWithCompleted(t *testing.T) {
+	bus := events.NewBus()
+	rec := &eventRecorder{}
+	bus.OnAll(rec.handler)
+	adapter := NewSSEAdapter(bus)
 
 	snap := snapshotRun{
 		Suites: []snapshotSuite{
-			{Tests: []snapshotTest{
+			{Name: "s", Tests: []snapshotTest{
 				{ID: 1, Name: "t1", Status: "passed"},
 				{ID: 2, Name: "t2", Status: "pending"},
 			}},
 		},
 	}
 	data, _ := json.Marshal(snap)
-	reporter.handleEvent(SSEEvent{Event: "snapshot", Data: data})
+	adapter.HandleEvent(SSEEvent{Event: "snapshot", Data: data})
 
-	if reporter.completed != 1 {
-		t.Errorf("expected 1 already completed, got %d", reporter.completed)
+	completed := rec.ofType(events.TestCompleted)
+	if len(completed) != 1 {
+		t.Errorf("expected 1 already-completed test event, got %d", len(completed))
 	}
 }
 
-func TestStream_ProgressReporter_TestUpdate(t *testing.T) {
-	var buf bytes.Buffer
-	reporter := &progressReporter{
-		out:        &buf,
-		testNames:  map[int64]string{1: "login-test"},
-		totalTests: 2,
-	}
+func TestAdapter_TestUpdatePassed(t *testing.T) {
+	bus := events.NewBus()
+	rec := &eventRecorder{}
+	bus.OnAll(rec.handler)
+	adapter := NewSSEAdapter(bus)
+	adapter.testNames[1] = "login-test"
+	adapter.suiteName[1] = "auth"
 
 	update := testUpdate{TestID: 1, Status: "passed", DurationMs: 843}
 	data, _ := json.Marshal(update)
-	result, done := reporter.handleEvent(SSEEvent{Event: "test_update", Data: data})
+	result, done := adapter.HandleEvent(SSEEvent{Event: "test_update", Data: data})
 
 	if done {
 		t.Errorf("expected not done after test_update")
@@ -86,88 +113,82 @@ func TestStream_ProgressReporter_TestUpdate(t *testing.T) {
 	if result != nil {
 		t.Errorf("expected nil result")
 	}
-	if reporter.completed != 1 {
-		t.Errorf("expected 1 completed, got %d", reporter.completed)
-	}
 
-	output := buf.String()
-	if !strings.Contains(output, "login-test") {
-		t.Errorf("expected test name in output, got %q", output)
+	completed := rec.ofType(events.TestCompleted)
+	if len(completed) != 1 {
+		t.Fatalf("expected 1 TestCompleted, got %d", len(completed))
 	}
-	if !strings.Contains(output, "✓") {
-		t.Errorf("expected ✓ for passed test, got %q", output)
+	if completed[0].TestName != "login-test" {
+		t.Errorf("expected login-test, got %q", completed[0].TestName)
+	}
+	if completed[0].SuiteName != "auth" {
+		t.Errorf("expected auth suite, got %q", completed[0].SuiteName)
 	}
 }
 
-func TestStream_ProgressReporter_TestUpdateFailed(t *testing.T) {
-	var buf bytes.Buffer
-	reporter := &progressReporter{
-		out:        &buf,
-		testNames:  map[int64]string{1: "fail-test"},
-		totalTests: 1,
-	}
+func TestAdapter_TestUpdateFailed(t *testing.T) {
+	bus := events.NewBus()
+	rec := &eventRecorder{}
+	bus.OnAll(rec.handler)
+	adapter := NewSSEAdapter(bus)
+	adapter.testNames[1] = "fail-test"
+	adapter.suiteName[1] = "suite"
 
 	update := testUpdate{TestID: 1, Status: "failed", DurationMs: 500}
 	data, _ := json.Marshal(update)
-	reporter.handleEvent(SSEEvent{Event: "test_update", Data: data})
+	adapter.HandleEvent(SSEEvent{Event: "test_update", Data: data})
 
-	output := buf.String()
-	if !strings.Contains(output, "✗") {
-		t.Errorf("expected ✗ for failed test, got %q", output)
+	failed := rec.ofType(events.TestFailed)
+	if len(failed) != 1 {
+		t.Fatalf("expected 1 TestFailed, got %d", len(failed))
 	}
 }
 
-func TestStream_ProgressReporter_TestUpdateSkipped(t *testing.T) {
-	var buf bytes.Buffer
-	reporter := &progressReporter{
-		out:        &buf,
-		testNames:  map[int64]string{1: "skip-test"},
-		totalTests: 1,
-	}
+func TestAdapter_TestUpdateSkipped(t *testing.T) {
+	bus := events.NewBus()
+	rec := &eventRecorder{}
+	bus.OnAll(rec.handler)
+	adapter := NewSSEAdapter(bus)
+	adapter.testNames[1] = "skip-test"
+	adapter.suiteName[1] = "suite"
 
 	update := testUpdate{TestID: 1, Status: "skipped", DurationMs: 0}
 	data, _ := json.Marshal(update)
-	reporter.handleEvent(SSEEvent{Event: "test_update", Data: data})
+	adapter.HandleEvent(SSEEvent{Event: "test_update", Data: data})
 
-	output := buf.String()
-	if !strings.Contains(output, "-") {
-		t.Errorf("expected - for skipped test, got %q", output)
+	skipped := rec.ofType(events.TestSkipped)
+	if len(skipped) != 1 {
+		t.Fatalf("expected 1 TestSkipped, got %d", len(skipped))
 	}
 }
 
-func TestStream_ProgressReporter_TestUpdateRunning(t *testing.T) {
-	var buf bytes.Buffer
-	reporter := &progressReporter{
-		out:        &buf,
-		testNames:  map[int64]string{1: "running-test"},
-		totalTests: 1,
-	}
+func TestAdapter_TestUpdateRunning(t *testing.T) {
+	bus := events.NewBus()
+	rec := &eventRecorder{}
+	bus.OnAll(rec.handler)
+	adapter := NewSSEAdapter(bus)
+	adapter.testNames[1] = "running-test"
+	adapter.suiteName[1] = "suite"
 
 	update := testUpdate{TestID: 1, Status: "running", DurationMs: 0}
 	data, _ := json.Marshal(update)
-	reporter.handleEvent(SSEEvent{Event: "test_update", Data: data})
+	adapter.HandleEvent(SSEEvent{Event: "test_update", Data: data})
 
-	// Running status should not produce output
-	if buf.Len() != 0 {
-		t.Errorf("expected no output for running status, got %q", buf.String())
-	}
-	if reporter.completed != 0 {
-		t.Errorf("expected 0 completed for running status, got %d", reporter.completed)
+	started := rec.ofType(events.TestStarted)
+	if len(started) != 1 {
+		t.Fatalf("expected 1 TestStarted for running status, got %d", len(started))
 	}
 }
 
-func TestStream_ProgressReporter_RunCompleted(t *testing.T) {
-	var buf bytes.Buffer
-	reporter := &progressReporter{
-		out:        &buf,
-		testNames:  make(map[int64]string),
-		totalTests: 3,
-		completed:  3,
-	}
+func TestAdapter_RunCompleted(t *testing.T) {
+	bus := events.NewBus()
+	rec := &eventRecorder{}
+	bus.OnAll(rec.handler)
+	adapter := NewSSEAdapter(bus)
 
 	rc := runCompleted{Passed: 2, Failed: 1, Skipped: 0}
 	data, _ := json.Marshal(rc)
-	result, done := reporter.handleEvent(SSEEvent{Event: "run_completed", Data: data})
+	result, done := adapter.HandleEvent(SSEEvent{Event: "run_completed", Data: data})
 
 	if !done {
 		t.Errorf("expected done=true for run_completed")
@@ -182,24 +203,21 @@ func TestStream_ProgressReporter_RunCompleted(t *testing.T) {
 		t.Errorf("expected 1 failed, got %d", result.Failed)
 	}
 
-	output := buf.String()
-	if !strings.Contains(output, "FAILED") {
-		t.Errorf("expected FAILED in output, got %q", output)
+	completed := rec.ofType(events.RunCompleted)
+	if len(completed) != 1 {
+		t.Fatalf("expected 1 RunCompleted event, got %d", len(completed))
 	}
 }
 
-func TestStream_ProgressReporter_RunCompletedAllPassed(t *testing.T) {
-	var buf bytes.Buffer
-	reporter := &progressReporter{
-		out:        &buf,
-		testNames:  make(map[int64]string),
-		totalTests: 2,
-		completed:  2,
-	}
+func TestAdapter_RunCompletedAllPassed(t *testing.T) {
+	bus := events.NewBus()
+	rec := &eventRecorder{}
+	bus.OnAll(rec.handler)
+	adapter := NewSSEAdapter(bus)
 
 	rc := runCompleted{Passed: 2, Failed: 0, Skipped: 0}
 	data, _ := json.Marshal(rc)
-	result, done := reporter.handleEvent(SSEEvent{Event: "run_completed", Data: data})
+	result, done := adapter.HandleEvent(SSEEvent{Event: "run_completed", Data: data})
 
 	if !done {
 		t.Errorf("expected done=true")
@@ -207,21 +225,13 @@ func TestStream_ProgressReporter_RunCompletedAllPassed(t *testing.T) {
 	if result.HasFailures() {
 		t.Errorf("expected no failures")
 	}
-
-	output := buf.String()
-	if !strings.Contains(output, "PASSED") {
-		t.Errorf("expected PASSED in output, got %q", output)
-	}
 }
 
-func TestStream_ProgressReporter_UnknownEvent(t *testing.T) {
-	var buf bytes.Buffer
-	reporter := &progressReporter{
-		out:       &buf,
-		testNames: make(map[int64]string),
-	}
+func TestAdapter_UnknownEvent(t *testing.T) {
+	bus := events.NewBus()
+	adapter := NewSSEAdapter(bus)
 
-	result, done := reporter.handleEvent(SSEEvent{Event: "unknown", Data: json.RawMessage(`{}`)})
+	result, done := adapter.HandleEvent(SSEEvent{Event: "unknown", Data: json.RawMessage(`{}`)})
 	if done {
 		t.Errorf("expected not done for unknown event")
 	}
@@ -265,7 +275,7 @@ func TestStream_StreamRun_FullLifecycle(t *testing.T) {
 		snap := snapshotRun{
 			ID: "run-123",
 			Suites: []snapshotSuite{
-				{Tests: []snapshotTest{
+				{Name: "suite-1", Tests: []snapshotTest{
 					{ID: 1, Name: "test-a", Status: "pending"},
 					{ID: 2, Name: "test-b", Status: "pending"},
 				}},
@@ -294,9 +304,12 @@ func TestStream_StreamRun_FullLifecycle(t *testing.T) {
 	}))
 	defer server.Close()
 
+	bus := events.NewBus()
+	rec := &eventRecorder{}
+	bus.OnAll(rec.handler)
+
 	client := NewClient(server.URL, "")
-	var buf bytes.Buffer
-	result, err := client.StreamRun(context.Background(), "run-123", &buf)
+	result, err := client.StreamRun(context.Background(), "run-123", bus)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -310,12 +323,15 @@ func TestStream_StreamRun_FullLifecycle(t *testing.T) {
 		t.Errorf("expected 0 failed, got %d", result.Failed)
 	}
 
-	output := buf.String()
-	if !strings.Contains(output, "test-a") {
-		t.Errorf("expected test-a in output")
+	// Verify events were emitted
+	if len(rec.ofType(events.RunStarted)) != 1 {
+		t.Errorf("expected 1 RunStarted event")
 	}
-	if !strings.Contains(output, "PASSED") {
-		t.Errorf("expected PASSED in output")
+	if len(rec.ofType(events.TestCompleted)) != 2 {
+		t.Errorf("expected 2 TestCompleted events, got %d", len(rec.ofType(events.TestCompleted)))
+	}
+	if len(rec.ofType(events.RunCompleted)) != 1 {
+		t.Errorf("expected 1 RunCompleted event")
 	}
 }
 
@@ -328,7 +344,7 @@ func TestStream_StreamRun_ContextCancel(t *testing.T) {
 		}
 
 		// Send initial snapshot but never complete
-		snap := snapshotRun{Suites: []snapshotSuite{{Tests: []snapshotTest{{ID: 1, Name: "t1", Status: "pending"}}}}}
+		snap := snapshotRun{Suites: []snapshotSuite{{Name: "s", Tests: []snapshotTest{{ID: 1, Name: "t1", Status: "pending"}}}}}
 		snapData, _ := json.Marshal(snap)
 		fmt.Fprintf(w, "event: snapshot\ndata: %s\n\n", snapData)
 		flusher.Flush()
@@ -344,8 +360,8 @@ func TestStream_StreamRun_ContextCancel(t *testing.T) {
 	// Cancel immediately
 	cancel()
 
-	var buf bytes.Buffer
-	_, err := client.StreamRun(ctx, "run-123", &buf)
+	bus := events.NewBus()
+	_, err := client.StreamRun(ctx, "run-123", bus)
 	if err == nil {
 		t.Errorf("expected error for cancelled context")
 	}
@@ -359,8 +375,8 @@ func TestStream_StreamRun_ServerError(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.URL, "")
-	var buf bytes.Buffer
-	_, err := client.StreamRun(context.Background(), "run-123", &buf)
+	bus := events.NewBus()
+	_, err := client.StreamRun(context.Background(), "run-123", bus)
 	if err == nil {
 		t.Errorf("expected error for server error")
 	}

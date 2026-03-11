@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
-	"time"
+
+	"spark-cli/internal/events"
 )
 
 // SSEEvent represents a parsed Server-Sent Event.
@@ -32,11 +32,12 @@ func (r *RunResult) HasFailures() bool {
 
 // snapshotRun is the structure received in the "snapshot" SSE event.
 type snapshotRun struct {
-	ID     string        `json:"id"`
+	ID     string          `json:"id"`
 	Suites []snapshotSuite `json:"suites"`
 }
 
 type snapshotSuite struct {
+	Name  string         `json:"name"`
 	Tests []snapshotTest `json:"tests"`
 }
 
@@ -51,6 +52,7 @@ type testUpdate struct {
 	TestID     int64  `json:"test_id"`
 	Status     string `json:"status"`
 	DurationMs int64  `json:"duration"`
+	Message    string `json:"message"`
 }
 
 // runCompleted is the structure received in "run_completed" SSE events.
@@ -61,9 +63,9 @@ type runCompleted struct {
 	Skipped int    `json:"skipped"`
 }
 
-// StreamRun connects to the SSE stream for a run and reports progress.
+// StreamRun connects to the SSE stream for a run and emits events on the bus.
 // It blocks until the run completes or the context is cancelled.
-func (c *Client) StreamRun(ctx context.Context, runID string, out io.Writer) (*RunResult, error) {
+func (c *Client) StreamRun(ctx context.Context, runID string, bus *events.Bus) (*RunResult, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/api/events/runs?id="+runID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SSE request: %w", err)
@@ -87,14 +89,7 @@ func (c *Client) StreamRun(ctx context.Context, runID string, out io.Writer) (*R
 		return nil, fmt.Errorf("SSE stream returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse SSE stream
-	reporter := &progressReporter{
-		out:        out,
-		testNames:  make(map[int64]string),
-		totalTests: 0,
-		completed:  0,
-		startTime:  time.Now(),
-	}
+	adapter := NewSSEAdapter(bus)
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024) // 4MB max for large snapshots
@@ -124,7 +119,7 @@ func (c *Client) StreamRun(ctx context.Context, runID string, out io.Writer) (*R
 		// Empty line = dispatch event
 		if line == "" && eventType != "" && len(dataLines) > 0 {
 			data := json.RawMessage(strings.Join(dataLines, "\n"))
-			result, done := reporter.handleEvent(SSEEvent{Event: eventType, Data: data})
+			result, done := adapter.HandleEvent(SSEEvent{Event: eventType, Data: data})
 			if done {
 				return result, nil
 			}
@@ -141,99 +136,4 @@ func (c *Client) StreamRun(ctx context.Context, runID string, out io.Writer) (*R
 	}
 
 	return nil, fmt.Errorf("SSE stream closed unexpectedly")
-}
-
-// progressReporter handles SSE events and prints progress.
-type progressReporter struct {
-	out        io.Writer
-	testNames  map[int64]string
-	totalTests int
-	completed  int
-	startTime  time.Time
-	headerPrinted bool
-}
-
-// handleEvent processes an SSE event and returns a result if the run is complete.
-func (p *progressReporter) handleEvent(event SSEEvent) (*RunResult, bool) {
-	switch event.Event {
-	case "snapshot":
-		var snap snapshotRun
-		if err := json.Unmarshal(event.Data, &snap); err != nil {
-			log.Printf("Warning: failed to unmarshal snapshot event: %v", err)
-			return nil, false
-		}
-		// Build test ID -> name map and count totals
-		for _, suite := range snap.Suites {
-			for _, test := range suite.Tests {
-				p.testNames[test.ID] = test.Name
-				p.totalTests++
-				// Count already-completed tests from snapshot
-				if test.Status == "passed" || test.Status == "failed" || test.Status == "error" || test.Status == "skipped" {
-					p.completed++
-				}
-			}
-		}
-
-	case "test_update":
-		var update testUpdate
-		if err := json.Unmarshal(event.Data, &update); err != nil {
-			log.Printf("Warning: failed to unmarshal test_update event: %v", err)
-			return nil, false
-		}
-
-		// Only print for terminal statuses
-		if update.Status == "passed" || update.Status == "failed" || update.Status == "error" || update.Status == "skipped" {
-			p.completed++
-
-			if !p.headerPrinted {
-				fmt.Fprintf(p.out, "\nRunning tests\n")
-				p.headerPrinted = true
-			}
-
-			name := p.testNames[update.TestID]
-			if name == "" {
-				name = fmt.Sprintf("test-%d", update.TestID)
-			}
-
-			pct := 0
-			if p.totalTests > 0 {
-				pct = (p.completed * 100) / p.totalTests
-			}
-
-			duration := float64(update.DurationMs) / 1000.0
-			icon := "✓"
-			if update.Status == "failed" || update.Status == "error" {
-				icon = "✗"
-			} else if update.Status == "skipped" {
-				icon = "-"
-			}
-
-			fmt.Fprintf(p.out, "  %s [%3d%%] %s (%.3fs)\n", icon, pct, name, duration)
-		}
-
-	case "run_completed":
-		var rc runCompleted
-		if err := json.Unmarshal(event.Data, &rc); err != nil {
-			log.Printf("Warning: failed to unmarshal run_completed event: %v", err)
-			return nil, false
-		}
-
-		elapsed := time.Since(p.startTime).Seconds()
-
-		fmt.Fprintln(p.out)
-		total := rc.Passed + rc.Failed + rc.Skipped
-		if rc.Failed > 0 {
-			fmt.Fprintf(p.out, "FAILED %d/%d (%d failed) in %.1fs\n", rc.Passed, total, rc.Failed, elapsed)
-		} else {
-			fmt.Fprintf(p.out, "PASSED %d/%d in %.1fs\n", rc.Passed, total, elapsed)
-		}
-
-		return &RunResult{
-			Passed:  rc.Passed,
-			Failed:  rc.Failed,
-			Skipped: rc.Skipped,
-		}, true
-	}
-
-	return nil, false
 }

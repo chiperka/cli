@@ -241,7 +241,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	if cloudMode {
 		ignoredInCloud := []string{
 			"artifacts", "regenerate-snapshots",
-			"verbose", "debug", "timeout", "workers", "json",
+			"timeout", "workers",
 		}
 		for _, flag := range ignoredInCloud {
 			if cmd.Flags().Changed(flag) {
@@ -256,7 +256,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		if cloudURL == "" {
 			cloudURL = "https://spark-cloud.finie.io"
 		}
-		err := runTestsCloud(cloudURL, tests, services, startTime)
+		err := runTestsCloud(cloudURL, tests, services, startTime, bus, emitter)
 		telemetry.Wait(4 * time.Second)
 		return err // runTestsCloud already wraps with ExitError
 	}
@@ -458,7 +458,7 @@ func resolveCloudToken(apiURL string) string {
 }
 
 // runTestsCloud uploads tests to a remote API server and streams results.
-func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.ServiceTemplateCollection, startTime time.Time) error {
+func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.ServiceTemplateCollection, startTime time.Time, bus *events.Bus, emitter *events.Emitter) error {
 	token := resolveCloudToken(apiURL)
 	client := cloud.NewClient(apiURL, token)
 
@@ -475,7 +475,10 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		return fmt.Errorf("failed to build submission: %w", err)
 	}
 
-	fmt.Printf("Uploading %d tests to %s...\n", tests.TotalTests(), apiURL)
+	emitter.Info(events.Fields{
+		"action": "cloud_upload",
+		"msg":    fmt.Sprintf("Uploading %d tests to %s...", tests.TotalTests(), apiURL),
+	})
 
 	// Create run
 	resp, err := client.CreateRun(submission)
@@ -484,7 +487,11 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		return fmt.Errorf("failed to create run: %w", err)
 	}
 
-	fmt.Printf("Run created: %s\n", resp.ID)
+	emitter.Info(events.Fields{
+		"action": "cloud_run_created",
+		"run_id": resp.ID,
+		"msg":    fmt.Sprintf("Run created: %s", resp.ID),
+	})
 
 	// Set up context with Ctrl+C handler
 	ctx, cancel := context.WithCancel(context.Background())
@@ -506,8 +513,8 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		os.Exit(1)
 	}()
 
-	// Stream results
-	result, err := client.StreamRun(ctx, resp.ID, os.Stdout)
+	// Stream results — events go through the bus to all registered reporters
+	result, err := client.StreamRun(ctx, resp.ID, bus)
 	if err != nil {
 		telemetry.RecordError(Version, telemetry.ClassifyError(err))
 		if ctx.Err() != nil {
@@ -526,7 +533,11 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		} else if err := client.DownloadHTMLReportZip(resp.ID, htmlOutput); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to download HTML report: %v\n", err)
 		} else {
-			fmt.Printf("HTML report written to %s\n", filepath.Join(htmlOutput, "index.html"))
+			emitter.Info(events.Fields{
+				"action": "html_download",
+				"target": filepath.Join(htmlOutput, "index.html"),
+				"msg":    fmt.Sprintf("HTML report written to %s", filepath.Join(htmlOutput, "index.html")),
+			})
 		}
 	}
 
@@ -535,7 +546,11 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		if err := client.DownloadReport(resp.ID, "xml", junitOutput); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to download JUnit report: %v\n", err)
 		} else {
-			fmt.Printf("JUnit report written to %s\n", junitOutput)
+			emitter.Info(events.Fields{
+				"action": "junit_download",
+				"target": junitOutput,
+				"msg":    fmt.Sprintf("JUnit report written to %s", junitOutput),
+			})
 		}
 	}
 
