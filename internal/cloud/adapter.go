@@ -12,19 +12,21 @@ import (
 // SSEAdapter bridges SSE events into the internal event bus so that all
 // existing reporters (CLI, TeamCity, JSON, Verbose) work in cloud mode.
 type SSEAdapter struct {
-	bus       *events.Bus
-	testNames map[int64]string
-	suiteName map[int64]string // test ID → suite name
-	startTime time.Time
+	bus          *events.Bus
+	testNames    map[int64]string
+	suiteName    map[int64]string // test ID → suite name
+	finishedTest map[int64]bool   // test IDs that already emitted a terminal event
+	startTime    time.Time
 }
 
 // NewSSEAdapter creates an adapter that translates SSE events into event bus emissions.
 func NewSSEAdapter(bus *events.Bus) *SSEAdapter {
 	return &SSEAdapter{
-		bus:       bus,
-		testNames: make(map[int64]string),
-		suiteName: make(map[int64]string),
-		startTime: time.Now(),
+		bus:          bus,
+		testNames:    make(map[int64]string),
+		suiteName:    make(map[int64]string),
+		finishedTest: make(map[int64]bool),
+		startTime:    time.Now(),
 	}
 }
 
@@ -70,12 +72,15 @@ func (a *SSEAdapter) handleSnapshot(data json.RawMessage) (*RunResult, bool) {
 				te := events.NewTestEvent(events.TestStarted, suite.Name, test.Name)
 				a.bus.Emit(te)
 			case "passed":
+				a.finishedTest[test.ID] = true
 				te := events.NewTestEvent(events.TestCompleted, suite.Name, test.Name)
 				a.bus.Emit(te)
 			case "failed", "error":
+				a.finishedTest[test.ID] = true
 				te := events.NewTestEvent(events.TestFailed, suite.Name, test.Name)
 				a.bus.Emit(te)
 			case "skipped":
+				a.finishedTest[test.ID] = true
 				te := events.NewTestEvent(events.TestSkipped, suite.Name, test.Name)
 				a.bus.Emit(te)
 			}
@@ -105,12 +110,24 @@ func (a *SSEAdapter) handleTestUpdate(data json.RawMessage) (*RunResult, bool) {
 		e := events.NewTestEvent(events.TestStarted, suite, name)
 		a.bus.Emit(e)
 	case "passed":
+		if a.finishedTest[update.TestID] {
+			return nil, false // already counted from snapshot
+		}
+		a.finishedTest[update.TestID] = true
 		e := events.NewTestEvent(events.TestCompleted, suite, name).WithDuration(duration)
 		a.bus.Emit(e)
 	case "failed", "error":
+		if a.finishedTest[update.TestID] {
+			return nil, false // already counted from snapshot
+		}
+		a.finishedTest[update.TestID] = true
 		e := events.NewTestEvent(events.TestFailed, suite, name).WithDuration(duration).WithMessage(update.Message)
 		a.bus.Emit(e)
 	case "skipped":
+		if a.finishedTest[update.TestID] {
+			return nil, false // already counted from snapshot
+		}
+		a.finishedTest[update.TestID] = true
 		e := events.NewTestEvent(events.TestSkipped, suite, name)
 		a.bus.Emit(e)
 	}

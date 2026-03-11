@@ -131,7 +131,22 @@ func (c *CLIReporter) onRunCompleted(e *events.Event) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.writeSummary(c.passed, c.failed, c.skipped, e.Data.Duration)
+	// Prefer server-side counts from run_completed event (authoritative),
+	// fall back to locally tracked counts if not available (standalone mode).
+	passed := c.passed
+	failed := c.failed
+	skipped := c.skipped
+	if p, ok := e.Data.Details["passed"].(int); ok {
+		passed = p
+	}
+	if f, ok := e.Data.Details["failed"].(int); ok {
+		failed = f
+	}
+	if s, ok := e.Data.Details["skipped"].(int); ok {
+		skipped = s
+	}
+
+	c.writeSummary(passed, failed, skipped, e.Data.Duration)
 }
 
 func (c *CLIReporter) testProgressPercent() float64 {
