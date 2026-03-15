@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 	"spark-cli/internal/cloud"
 	"spark-cli/internal/config"
+	"spark-cli/internal/envfile"
 	"spark-cli/internal/events"
 	"spark-cli/internal/events/subscribers"
 	"spark-cli/internal/finder"
@@ -41,6 +42,7 @@ var teamcityOutput bool
 var jsonOutput bool
 var pathMapping string
 var configFile string
+var envFiles []string
 
 var runCmd = &cobra.Command{
 	Use:   "run [path]",
@@ -78,6 +80,8 @@ Example:
   spark run ./tests --verbose
   spark run ./tests --debug
   spark run ./tests --configuration spark.yaml
+  spark run ./tests --env-file .env
+  spark run ./tests --env-file .env --env-file .env.local
   spark run ./tests --cloud
   SPARK_CLOUD_URL=http://localhost:8080 spark run ./tests --cloud`,
 	Args:          cobra.MaximumNArgs(1),
@@ -104,6 +108,7 @@ func init() {
 	runCmd.Flags().BoolVar(&jsonOutput, "json", false, "Output NDJSON for machine consumption")
 	runCmd.Flags().StringVar(&pathMapping, "path-mapping", "", "Path prefix mapping for artifact paths (container=host, e.g. /srv/spark=/Users/me/project)")
 	runCmd.Flags().StringVar(&configFile, "configuration", "", "Path to spark.yaml configuration file (auto-discovered if not set)")
+	runCmd.Flags().StringSliceVar(&envFiles, "env-file", nil, "Load environment variables from file (can be specified multiple times)")
 }
 
 // runTests is the main entry point for the run command.
@@ -137,6 +142,13 @@ func runTests(cmd *cobra.Command, args []string) error {
 	if len(files) == 0 {
 		fmt.Printf("No *.spark files found in %s\n", searchPath)
 		return nil
+	}
+
+	// Load env files before parsing so $SPARK_* expansion can use them
+	if len(envFiles) > 0 {
+		if err := envfile.LoadAll(envFiles); err != nil {
+			return fmt.Errorf("failed to load env file: %w", err)
+		}
 	}
 
 	// Parse all found files
