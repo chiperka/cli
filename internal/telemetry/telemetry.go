@@ -78,7 +78,7 @@ func ShowNoticeIfNeeded(teamcityMode bool) {
 	fmt.Fprintln(os.Stderr, "")
 
 	// Save config so notice isn't shown again
-	SaveConfig(&Config{
+	SaveConfig(&TelemetryConfig{
 		Enabled:     true,
 		NoticeShown: true,
 	})

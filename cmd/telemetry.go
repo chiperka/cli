@@ -25,7 +25,7 @@ var telemetryEnableCmd = &cobra.Command{
 	Use:   "enable",
 	Short: "Enable anonymous telemetry",
 	Run: func(cmd *cobra.Command, args []string) {
-		telemetry.SaveConfig(&telemetry.Config{
+		telemetry.SaveConfig(&telemetry.TelemetryConfig{
 			Enabled:     true,
 			NoticeShown: true,
 		})
@@ -37,7 +37,7 @@ var telemetryDisableCmd = &cobra.Command{
 	Use:   "disable",
 	Short: "Disable anonymous telemetry",
 	Run: func(cmd *cobra.Command, args []string) {
-		telemetry.SaveConfig(&telemetry.Config{
+		telemetry.SaveConfig(&telemetry.TelemetryConfig{
 			Enabled:     false,
 			NoticeShown: true,
 		})
@@ -61,9 +61,9 @@ var telemetryStatusCmd = &cobra.Command{
 		if os.Getenv("DO_NOT_TRACK") == "1" {
 			fmt.Println("  (disabled via DO_NOT_TRACK=1)")
 		}
-		cfg := telemetry.LoadConfig()
-		if cfg != nil {
-			fmt.Printf("  config: enabled=%v, updated=%s\n", cfg.Enabled, cfg.UpdatedAt.Format("2006-01-02 15:04:05"))
+		mcfg := telemetry.LoadMachineConfig()
+		if mcfg != nil {
+			fmt.Printf("  config: enabled=%v, updated=%s\n", mcfg.Telemetry.Enabled, mcfg.UpdatedAt.Format("2006-01-02 15:04:05"))
 		} else {
 			fmt.Println("  config: not set (first run will show notice)")
 		}

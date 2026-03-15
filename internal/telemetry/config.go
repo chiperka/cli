@@ -7,8 +7,20 @@ import (
 	"time"
 )
 
-// Config holds the telemetry consent state.
-type Config struct {
+// TelemetryConfig holds the telemetry consent state.
+type TelemetryConfig struct {
+	Enabled     bool `json:"enabled"`
+	NoticeShown bool `json:"notice_shown"`
+}
+
+// MachineConfig is the top-level structure for ~/.spark/config.json.
+type MachineConfig struct {
+	Telemetry TelemetryConfig `json:"telemetry"`
+	UpdatedAt time.Time       `json:"updated_at"`
+}
+
+// legacyConfig mirrors the old flat telemetry.json format for migration.
+type legacyConfig struct {
 	Enabled     bool      `json:"enabled"`
 	NoticeShown bool      `json:"notice_shown"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -23,8 +35,17 @@ func configDir() string {
 	return filepath.Join(home, ".spark")
 }
 
-// configPath returns the path to ~/.spark/telemetry
+// configPath returns the path to ~/.spark/config.json
 func configPath() string {
+	dir := configDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "config.json")
+}
+
+// legacyConfigPath returns the path to the old ~/.spark/telemetry.json
+func legacyConfigPath() string {
 	dir := configDir()
 	if dir == "" {
 		return ""
@@ -32,9 +53,52 @@ func configPath() string {
 	return filepath.Join(dir, "telemetry.json")
 }
 
-// LoadConfig reads the telemetry config from ~/.spark/telemetry.
-// Returns nil if the file doesn't exist or can't be read.
-func LoadConfig() *Config {
+// LoadConfig reads the telemetry config from ~/.spark/config.json.
+// If config.json is missing but telemetry.json exists, migrates the old format.
+// Returns nil if no config exists or can't be read.
+func LoadConfig() *TelemetryConfig {
+	path := configPath()
+	if path == "" {
+		return nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err == nil {
+		var cfg MachineConfig
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			return nil
+		}
+		return &cfg.Telemetry
+	}
+
+	// config.json doesn't exist — try migrating from telemetry.json
+	legacyPath := legacyConfigPath()
+	if legacyPath == "" {
+		return nil
+	}
+
+	legacyData, err := os.ReadFile(legacyPath)
+	if err != nil {
+		return nil
+	}
+
+	var old legacyConfig
+	if err := json.Unmarshal(legacyData, &old); err != nil {
+		return nil
+	}
+
+	// Migrate: save in new format
+	tc := &TelemetryConfig{
+		Enabled:     old.Enabled,
+		NoticeShown: old.NoticeShown,
+	}
+	SaveConfig(tc)
+	return tc
+}
+
+// LoadMachineConfig reads the full machine config from ~/.spark/config.json.
+// Returns nil if no config exists or can't be read.
+func LoadMachineConfig() *MachineConfig {
 	path := configPath()
 	if path == "" {
 		return nil
@@ -45,7 +109,7 @@ func LoadConfig() *Config {
 		return nil
 	}
 
-	var cfg Config
+	var cfg MachineConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil
 	}
@@ -53,9 +117,11 @@ func LoadConfig() *Config {
 	return &cfg
 }
 
-// SaveConfig writes the telemetry config to ~/.spark/telemetry.
+// SaveConfig writes the telemetry config to ~/.spark/config.json.
+// Loads the existing MachineConfig first to preserve other sections,
+// then updates .Telemetry and .UpdatedAt.
 // Creates ~/.spark/ if it doesn't exist. Silently ignores errors.
-func SaveConfig(cfg *Config) {
+func SaveConfig(cfg *TelemetryConfig) {
 	dir := configDir()
 	if dir == "" {
 		return
@@ -65,14 +131,22 @@ func SaveConfig(cfg *Config) {
 		return
 	}
 
-	cfg.UpdatedAt = time.Now()
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
+	path := configPath()
+	if path == "" {
 		return
 	}
 
-	path := configPath()
-	if path == "" {
+	// Load existing machine config to preserve other sections
+	var machine MachineConfig
+	if data, err := os.ReadFile(path); err == nil {
+		json.Unmarshal(data, &machine)
+	}
+
+	machine.Telemetry = *cfg
+	machine.UpdatedAt = time.Now()
+
+	data, err := json.MarshalIndent(machine, "", "  ")
+	if err != nil {
 		return
 	}
 
