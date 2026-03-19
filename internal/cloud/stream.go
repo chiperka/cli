@@ -20,9 +20,10 @@ type SSEEvent struct {
 
 // RunResult holds the final outcome of a cloud run.
 type RunResult struct {
-	Passed  int
-	Failed  int
-	Skipped int
+	Passed    int
+	Failed    int
+	Skipped   int
+	Cancelled bool
 }
 
 // HasFailures returns true if any tests failed.

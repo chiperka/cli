@@ -11,10 +11,11 @@ import (
 
 // Exit codes for the CLI.
 const (
-	ExitOK             = 0 // All tests passed / command succeeded
-	ExitTestFailure    = 1 // Test assertion failures
-	ExitInfraError     = 2 // Infrastructure error (Docker, network, config loading, etc.)
+	ExitOK              = 0 // All tests passed / command succeeded
+	ExitTestFailure     = 1 // Test assertion failures
+	ExitInfraError      = 2 // Infrastructure error (Docker, network, config loading, etc.)
 	ExitValidationError = 3 // Validation errors in test files
+	ExitCancelled       = 4 // Run was manually cancelled
 )
 
 // ExitError wraps an error with a specific exit code.

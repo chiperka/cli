@@ -30,6 +30,14 @@ func NewSSEAdapter(bus *events.Bus) *SSEAdapter {
 	}
 }
 
+// runCancelled is the structure received in "run_cancelled" SSE events.
+type runCancelled struct {
+	RunID     string `json:"run_id"`
+	Passed    int    `json:"passed"`
+	Failed    int    `json:"failed"`
+	Cancelled int    `json:"cancelled"`
+}
+
 // HandleEvent processes an SSE event and returns a RunResult when the run completes.
 func (a *SSEAdapter) HandleEvent(event SSEEvent) (*RunResult, bool) {
 	switch event.Event {
@@ -39,6 +47,8 @@ func (a *SSEAdapter) HandleEvent(event SSEEvent) (*RunResult, bool) {
 		return a.handleTestUpdate(event.Data)
 	case "run_completed":
 		return a.handleRunCompleted(event.Data)
+	case "run_cancelled":
+		return a.handleRunCancelled(event.Data)
 	}
 	return nil, false
 }
@@ -79,7 +89,7 @@ func (a *SSEAdapter) handleSnapshot(data json.RawMessage) (*RunResult, bool) {
 				a.finishedTest[test.ID] = true
 				te := events.NewTestEvent(events.TestFailed, suite.Name, test.Name)
 				a.bus.Emit(te)
-			case "skipped":
+			case "skipped", "cancelled":
 				a.finishedTest[test.ID] = true
 				te := events.NewTestEvent(events.TestSkipped, suite.Name, test.Name)
 				a.bus.Emit(te)
@@ -123,7 +133,7 @@ func (a *SSEAdapter) handleTestUpdate(data json.RawMessage) (*RunResult, bool) {
 		a.finishedTest[update.TestID] = true
 		e := events.NewTestEvent(events.TestFailed, suite, name).WithDuration(duration).WithMessage(update.Message)
 		a.bus.Emit(e)
-	case "skipped":
+	case "skipped", "cancelled":
 		if a.finishedTest[update.TestID] {
 			return nil, false // already counted from snapshot
 		}
@@ -133,6 +143,28 @@ func (a *SSEAdapter) handleTestUpdate(data json.RawMessage) (*RunResult, bool) {
 	}
 
 	return nil, false
+}
+
+func (a *SSEAdapter) handleRunCancelled(data json.RawMessage) (*RunResult, bool) {
+	var rc runCancelled
+	if err := json.Unmarshal(data, &rc); err != nil {
+		log.Printf("Warning: failed to unmarshal run_cancelled event: %v", err)
+		return nil, false
+	}
+
+	elapsed := time.Since(a.startTime)
+	a.bus.Emit(events.NewEvent(events.RunCompleted).
+		WithDuration(elapsed).
+		WithDetail("passed", rc.Passed).
+		WithDetail("failed", rc.Failed).
+		WithDetail("skipped", rc.Cancelled))
+
+	return &RunResult{
+		Passed:    rc.Passed,
+		Failed:    rc.Failed,
+		Skipped:   rc.Cancelled,
+		Cancelled: true,
+	}, true
 }
 
 func (a *SSEAdapter) handleRunCompleted(data json.RawMessage) (*RunResult, bool) {

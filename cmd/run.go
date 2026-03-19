@@ -513,7 +513,7 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		if err := client.StopRun(resp.ID); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to stop run: %v\n", err)
 		}
-		cancel()
+		// Don't cancel context yet — let the SSE stream receive run_cancelled naturally
 		// Second signal: force quit immediately
 		<-sigCh
 		fmt.Fprintf(os.Stderr, "\nForce quit.\n")
@@ -525,7 +525,7 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 	if err != nil {
 		telemetry.RecordError(Version, telemetry.ClassifyError(err))
 		if ctx.Err() != nil {
-			return fmt.Errorf("run cancelled")
+			return exitErrorf(ExitCancelled, "run cancelled")
 		}
 		return fmt.Errorf("stream error: %w", err)
 	}
@@ -591,6 +591,10 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 
 	// Print link
 	fmt.Printf("\n  %s/runs/%s\n", strings.TrimSuffix(apiURL, "/"), resp.ID)
+
+	if result.Cancelled {
+		return exitErrorf(ExitCancelled, "run cancelled")
+	}
 
 	if result.HasFailures() {
 		return exitErrorf(ExitTestFailure, "test run failed: %d test(s) failed", result.Failed)
