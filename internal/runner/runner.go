@@ -654,10 +654,12 @@ func (r *Runner) runTestWithServices(ctx context.Context, test model.Test, uuid 
 	var setupCLIExecutions []model.CLIExecutionResult
 	var setupDuration time.Duration
 	if len(test.Setup) > 0 {
+		r.emit(ctx).SetupStarted(1, len(test.Setup))
 		setupStart := time.Now()
 		var err error
 		setupResults, setupHTTPExchanges, setupCLIExecutions, err = r.executeSetup(ctx, test, dockerManager, uuid, suiteFilePath)
 		setupDuration = time.Since(setupStart)
+		r.emit(ctx).SetupCompleted(setupDuration)
 		if err != nil {
 			result.Status = model.StatusError
 			result.Error = fmt.Errorf("setup failed: %w", err)
@@ -670,8 +672,19 @@ func (r *Runner) runTestWithServices(ctx context.Context, test model.Test, uuid 
 		}
 	}
 
-	// Execute the actual test
-	result = r.runTestExecution(ctx, test, dockerManager, uuid, suiteFilePath)
+	// Execute the actual test (execution + teardown + assertions)
+	// Teardown callback runs after execution but before assertions
+	var teardownFn func() ([]model.SetupResult, []model.HTTPExchangeResult, []model.CLIExecutionResult, error)
+	if len(test.Teardown) > 0 {
+		teardownFn = func() ([]model.SetupResult, []model.HTTPExchangeResult, []model.CLIExecutionResult, error) {
+			r.emit(ctx).TeardownStarted(1, len(test.Teardown))
+			teardownStart := time.Now()
+			results, httpEx, cliEx, err := r.executeTeardown(ctx, test, dockerManager, uuid, suiteFilePath)
+			r.emit(ctx).TeardownCompleted(time.Since(teardownStart))
+			return results, httpEx, cliEx, err
+		}
+	}
+	result = r.runTestExecution(ctx, test, dockerManager, uuid, suiteFilePath, teardownFn)
 	// Preserve service results, setup results, and phase durations after test execution
 	result.ServiceResults = serviceResults
 	result.SetupResults = setupResults
@@ -679,20 +692,6 @@ func (r *Runner) runTestWithServices(ctx context.Context, test model.Test, uuid 
 	result.CLIExecutions = append(setupCLIExecutions, result.CLIExecutions...)
 	result.ServicesDuration = servicesDuration
 	result.SetupDuration = setupDuration
-
-	// --- Teardown phase ---
-	if len(test.Teardown) > 0 {
-		teardownStart := time.Now()
-		teardownResults, teardownHTTPExchanges, teardownCLIExecutions, teardownErr := r.executeTeardown(ctx, test, dockerManager, uuid, suiteFilePath)
-		result.TeardownDuration = time.Since(teardownStart)
-		result.TeardownResults = teardownResults
-		result.HTTPExchanges = append(result.HTTPExchanges, teardownHTTPExchanges...)
-		result.CLIExecutions = append(result.CLIExecutions, teardownCLIExecutions...)
-		if teardownErr != nil {
-			result.Status = model.StatusError
-			result.Error = fmt.Errorf("teardown failed: %w", teardownErr)
-		}
-	}
 
 	return result
 }
@@ -1030,11 +1029,32 @@ func (r *Runner) collectArtifactsList(uuid string) []model.Artifact {
 }
 
 // runTestExecution performs the actual test execution (HTTP request + assertions).
-func (r *Runner) runTestExecution(ctx context.Context, test model.Test, dockerManager *docker.Manager, uuid string, suiteFilePath string) model.TestResult {
+// teardownFn is an optional callback that runs teardown steps between execution and assertions.
+// Returns teardown results, HTTP exchanges, CLI executions, and error.
+type teardownFn func() ([]model.SetupResult, []model.HTTPExchangeResult, []model.CLIExecutionResult, error)
+
+func (r *Runner) runTestExecution(ctx context.Context, test model.Test, dockerManager *docker.Manager, uuid string, suiteFilePath string, teardown teardownFn) model.TestResult {
 	result := model.TestResult{
 		Test:   test,
 		Status: model.StatusPassed,
 		UUID:   uuid,
+	}
+
+	// runTeardown executes the teardown callback if provided, recording results on the test result.
+	runTeardown := func() {
+		if teardown == nil {
+			return
+		}
+		teardownStart := time.Now()
+		teardownResults, teardownHTTPExchanges, teardownCLIExecutions, teardownErr := teardown()
+		result.TeardownDuration = time.Since(teardownStart)
+		result.TeardownResults = teardownResults
+		result.HTTPExchanges = append(result.HTTPExchanges, teardownHTTPExchanges...)
+		result.CLIExecutions = append(result.CLIExecutions, teardownCLIExecutions...)
+		if teardownErr != nil {
+			result.Status = model.StatusError
+			result.Error = fmt.Errorf("teardown failed: %w", teardownErr)
+		}
 	}
 
 	switch test.Execution.Executor {
@@ -1072,6 +1092,7 @@ func (r *Runner) runTestExecution(ctx context.Context, test model.Test, dockerMa
 			result.Error = err
 			httpExchange.Error = err
 			result.HTTPExchanges = append(result.HTTPExchanges, httpExchange)
+			runTeardown()
 			return result
 		}
 
@@ -1100,6 +1121,9 @@ func (r *Runner) runTestExecution(ctx context.Context, test model.Test, dockerMa
 				result.HTTPResponse.BodyArtifact = bodyArtifact
 			}
 		}
+
+		// Run teardown before assertions
+		runTeardown()
 
 		// Evaluate assertions
 		assertionsStart := time.Now()
@@ -1176,6 +1200,7 @@ func (r *Runner) runTestExecution(ctx context.Context, test model.Test, dockerMa
 			result.Error = err
 			cliExec.Error = err
 			result.CLIExecutions = append(result.CLIExecutions, cliExec)
+			runTeardown()
 			return result
 		}
 
@@ -1211,6 +1236,9 @@ func (r *Runner) runTestExecution(ctx context.Context, test model.Test, dockerMa
 				result.CLIResponse.StderrArtifact = stderrArtifact
 			}
 		}
+
+		// Run teardown before assertions
+		runTeardown()
 
 		// Evaluate assertions
 		cliResponse := &executor.CLIResponse{

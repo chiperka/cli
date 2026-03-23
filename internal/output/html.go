@@ -338,8 +338,8 @@ func transformTestResult(testResult model.TestResult, testID int, suiteName, sui
 			{"Services", testResult.ServicesDuration, "phase-services"},
 			{"Setup", testResult.SetupDuration, "phase-setup"},
 			{"Execution", testResult.ExecutionDuration, "phase-execution"},
-			{"Assertions", testResult.AssertionDuration, "phase-assertions"},
 			{"Teardown", testResult.TeardownDuration, "phase-teardown"},
+			{"Assertions", testResult.AssertionDuration, "phase-assertions"},
 			{"Cleanup", testResult.CleanupDuration, "phase-cleanup"},
 		}
 		for _, p := range phases {
@@ -1247,31 +1247,6 @@ const testPageTemplate = `<!DOCTYPE html>
         </details>
 
         <details class="section" open>
-            <summary>Assertions <span class="section-count">({{len .Assertions}})</span><span class="section-dur">{{.AssertionDuration}}</span></summary>
-            <div class="section-body">
-            {{if .Assertions}}
-                {{range .Assertions}}
-                <div class="assert-item">
-                    <div class="assert-icon {{.StatusClass}}">{{if .Passed}}&#10003;{{else}}&#10007;{{end}}</div>
-                    <div class="assert-body">
-                        <div class="assert-msg">{{.Message}}</div>
-                        {{if or .Expected .Actual}}
-                        <div class="assert-detail">
-                            {{if .Expected}}Expected: {{.Expected}}{{end}}
-                            {{if .Actual}} | Actual: {{.Actual}}{{end}}
-                        </div>
-                        {{end}}
-                    </div>
-                    <div class="assert-dur">{{.Duration}}</div>
-                </div>
-                {{end}}
-            {{else}}
-                <div class="empty">No assertions defined</div>
-            {{end}}
-            </div>
-        </details>
-
-        <details class="section" open>
             <summary>Teardown <span class="section-count">({{len .TeardownSteps}})</span><span class="section-dur">{{.TeardownDuration}}</span></summary>
             <div class="section-body">
             {{if .TeardownSteps}}
@@ -1315,6 +1290,31 @@ const testPageTemplate = `<!DOCTYPE html>
                 {{end}}
             {{else}}
                 <div class="empty">No teardown steps</div>
+            {{end}}
+            </div>
+        </details>
+
+        <details class="section" open>
+            <summary>Assertions <span class="section-count">({{len .Assertions}})</span><span class="section-dur">{{.AssertionDuration}}</span></summary>
+            <div class="section-body">
+            {{if .Assertions}}
+                {{range .Assertions}}
+                <div class="assert-item">
+                    <div class="assert-icon {{.StatusClass}}">{{if .Passed}}&#10003;{{else}}&#10007;{{end}}</div>
+                    <div class="assert-body">
+                        <div class="assert-msg">{{.Message}}</div>
+                        {{if or .Expected .Actual}}
+                        <div class="assert-detail">
+                            {{if .Expected}}Expected: {{.Expected}}{{end}}
+                            {{if .Actual}} | Actual: {{.Actual}}{{end}}
+                        </div>
+                        {{end}}
+                    </div>
+                    <div class="assert-dur">{{.Duration}}</div>
+                </div>
+                {{end}}
+            {{else}}
+                <div class="empty">No assertions defined</div>
             {{end}}
             </div>
         </details>
