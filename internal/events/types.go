@@ -14,13 +14,15 @@ const (
 	TestServiceStarted Type = "test.service.started"
 	TestServiceReady   Type = "test.service.ready"
 	TestHealthCheck    Type = "test.healthcheck"
-	TestSetupStarted   Type = "test.setup.started"
-	TestSetupCompleted Type = "test.setup.completed"
-	TestExecStarted    Type = "test.exec.started"
-	TestExecCompleted  Type = "test.exec.completed"
-	TestAssertStarted  Type = "test.assert.started"
-	TestAssertResult   Type = "test.assert.result"
-	TestCompleted      Type = "test.completed"
+	TestSetupStarted      Type = "test.setup.started"
+	TestSetupCompleted    Type = "test.setup.completed"
+	TestExecStarted       Type = "test.exec.started"
+	TestExecCompleted     Type = "test.exec.completed"
+	TestAssertStarted     Type = "test.assert.started"
+	TestAssertResult      Type = "test.assert.result"
+	TestTeardownStarted   Type = "test.teardown.started"
+	TestTeardownCompleted Type = "test.teardown.completed"
+	TestCompleted         Type = "test.completed"
 	TestFailed         Type = "test.failed"
 	TestSkipped        Type = "test.skipped"
 	TestCleanup        Type = "test.cleanup"
@@ -61,6 +63,7 @@ const (
 	PhaseSetup           Phase = "setup"
 	PhaseExecution       Phase = "execution"
 	PhaseAssertion       Phase = "assertion"
+	PhaseTeardown        Phase = "teardown"
 	PhaseCleanup         Phase = "cleanup"
 )
 
@@ -77,6 +80,8 @@ func PhaseForEvent(t Type) Phase {
 		return PhaseExecution
 	case TestAssertStarted, TestAssertResult:
 		return PhaseAssertion
+	case TestTeardownStarted, TestTeardownCompleted:
+		return PhaseTeardown
 	case TestCleanup, ContainerStopped, NetworkRemoved:
 		return PhaseCleanup
 	default:

@@ -566,6 +566,7 @@ type Test struct {
 	Setup       []SetupInstruction `yaml:"setup,omitempty" json:"setup,omitempty"`
 	Execution   Execution          `yaml:"execution" json:"execution"`
 	Assertions  []Assertion        `yaml:"assertions" json:"assertions"`
+	Teardown    []SetupInstruction `yaml:"teardown,omitempty" json:"teardown,omitempty"`
 }
 
 // Suite represents a collection of tests from a single spark.yaml file.

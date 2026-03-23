@@ -181,6 +181,18 @@ func (e *Emitter) SetupCompleted(duration time.Duration) {
 		WithDuration(duration))
 }
 
+// TeardownStarted emits test.teardown.started event.
+func (e *Emitter) TeardownStarted(step int, total int) {
+	e.Emit(NewTestEvent(TestTeardownStarted, e.suiteName, e.testName).
+		WithProgress(step, total))
+}
+
+// TeardownCompleted emits test.teardown.completed event.
+func (e *Emitter) TeardownCompleted(duration time.Duration) {
+	e.Emit(NewTestEvent(TestTeardownCompleted, e.suiteName, e.testName).
+		WithDuration(duration))
+}
+
 // ExecStarted emits test.exec.started event.
 func (e *Emitter) ExecStarted(execType, target string) {
 	e.Emit(NewTestEvent(TestExecStarted, e.suiteName, e.testName).

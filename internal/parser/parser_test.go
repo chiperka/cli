@@ -58,6 +58,9 @@ func TestParser_ParseFile_Full(t *testing.T) {
 	if len(test.Assertions) != 1 {
 		t.Errorf("expected 1 assertion, got %d", len(test.Assertions))
 	}
+	if len(test.Teardown) != 1 {
+		t.Errorf("expected 1 teardown step, got %d", len(test.Teardown))
+	}
 }
 
 func TestParser_ParseFile_SetsFilePath(t *testing.T) {

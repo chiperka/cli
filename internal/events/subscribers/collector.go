@@ -36,6 +36,7 @@ type TestTiming struct {
 	Setup          time.Duration
 	Execution      time.Duration
 	Assertion      time.Duration
+	Teardown       time.Duration
 	Cleanup        time.Duration
 
 	// Total duration
@@ -152,6 +153,12 @@ func (c *EventCollector) updateTimings(e *events.Event) {
 		key := e.TestKey()
 		if tt, ok := c.testTimings[key]; ok {
 			tt.Setup = e.Data.Duration
+		}
+
+	case events.TestTeardownCompleted:
+		key := e.TestKey()
+		if tt, ok := c.testTimings[key]; ok {
+			tt.Teardown = e.Data.Duration
 		}
 
 	case events.TestExecCompleted:
@@ -314,6 +321,8 @@ func (c *EventCollector) phaseDuration(tt *TestTiming, phase events.Phase) time.
 		return tt.Execution
 	case events.PhaseAssertion:
 		return tt.Assertion
+	case events.PhaseTeardown:
+		return tt.Teardown
 	case events.PhaseCleanup:
 		return tt.Cleanup
 	default:
@@ -346,6 +355,7 @@ func (c *EventCollector) PhaseBreakdown() map[events.Phase]time.Duration {
 		breakdown[events.PhaseSetup] += tt.Setup
 		breakdown[events.PhaseExecution] += tt.Execution
 		breakdown[events.PhaseAssertion] += tt.Assertion
+		breakdown[events.PhaseTeardown] += tt.Teardown
 		breakdown[events.PhaseCleanup] += tt.Cleanup
 	}
 

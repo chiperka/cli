@@ -119,12 +119,14 @@ type TestResult struct {
 	CLIResponse       *CLIResponseData
 	ServiceResults    []ServiceResult
 	SetupResults      []SetupResult
+	TeardownResults   []SetupResult
 	HTTPExchanges     []HTTPExchangeResult
 	CLIExecutions     []CLIExecutionResult
 	// Phase totals
 	NetworkDuration   time.Duration
 	ServicesDuration  time.Duration
 	SetupDuration     time.Duration
+	TeardownDuration  time.Duration
 	AssertionDuration time.Duration
 	CleanupDuration   time.Duration
 	// Log entries for HTML report

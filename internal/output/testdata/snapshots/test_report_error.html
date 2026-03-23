@@ -154,6 +154,7 @@
         .phase-setup { background: #8b5cf6; }
         .phase-execution { background: #f59e0b; }
         .phase-assertions { background: #10b981; }
+        .phase-teardown { background: #ec4899; }
         .phase-cleanup { background: #64748b; }
         .phase-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; }
         .phase-legend-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-secondary); }
@@ -249,6 +250,15 @@
             <div class="section-body">
             
                 <div class="empty">No assertions defined</div>
+            
+            </div>
+        </details>
+
+        <details class="section" open>
+            <summary>Teardown <span class="section-count">(0)</span><span class="section-dur">0.000s</span></summary>
+            <div class="section-body">
+            
+                <div class="empty">No teardown steps</div>
             
             </div>
         </details>

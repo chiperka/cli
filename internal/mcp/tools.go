@@ -284,6 +284,7 @@ func handleRead(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 		Setup      []readSetup     `json:"setup,omitempty"`
 		Execution  readExecution   `json:"execution"`
 		Assertions []readAssertion `json:"assertions,omitempty"`
+		Teardown   []readSetup     `json:"teardown,omitempty"`
 	}
 	type readSuite struct {
 		Name  string     `json:"name"`
@@ -337,6 +338,25 @@ func handleRead(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 				}
 				if step.CLI != nil {
 					rt.Setup = append(rt.Setup, readSetup{
+						Type:    "cli",
+						Service: step.CLI.Service,
+						Command: step.CLI.Command,
+					})
+				}
+			}
+
+			// Teardown
+			for _, step := range test.Teardown {
+				if step.HTTP != nil {
+					rt.Teardown = append(rt.Teardown, readSetup{
+						Type:   "http",
+						Target: step.HTTP.Target,
+						Method: step.HTTP.Request.Method,
+						URL:    step.HTTP.Request.URL,
+					})
+				}
+				if step.CLI != nil {
+					rt.Teardown = append(rt.Teardown, readSetup{
 						Type:    "cli",
 						Service: step.CLI.Service,
 						Command: step.CLI.Command,

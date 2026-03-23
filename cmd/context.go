@@ -90,6 +90,12 @@ tests:
     assertions:
       - statusCode:
           equals: 200
+    teardown:
+      - http:
+          target: http://api:8080
+          request:
+            method: POST
+            url: /cleanup
 ` + "```" + `
 
 ## Configuration (spark.yaml)

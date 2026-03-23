@@ -48,6 +48,7 @@ type HTMLTestData struct {
 	Assertions        []HTMLAssertionData
 	Services          []HTMLServiceData
 	SetupSteps        []HTMLSetupStepData
+	TeardownSteps     []HTMLSetupStepData
 	Artifacts         []HTMLArtifactData
 	Execution         HTMLExecutionData
 	Result            HTMLResultData
@@ -56,6 +57,7 @@ type HTMLTestData struct {
 	NetworkDuration   string
 	ServicesDuration  string
 	SetupDuration     string
+	TeardownDuration  string
 	AssertionDuration string
 	CleanupDuration   string
 	// Phase breakdown data (for timeline bar)
@@ -318,6 +320,7 @@ func transformTestResult(testResult model.TestResult, testID int, suiteName, sui
 		NetworkDuration:   fmt.Sprintf("%.3fs", testResult.NetworkDuration.Seconds()),
 		ServicesDuration:  fmt.Sprintf("%.3fs", testResult.ServicesDuration.Seconds()),
 		SetupDuration:     fmt.Sprintf("%.3fs", testResult.SetupDuration.Seconds()),
+		TeardownDuration:  fmt.Sprintf("%.3fs", testResult.TeardownDuration.Seconds()),
 		AssertionDuration: fmt.Sprintf("%.3fs", testResult.AssertionDuration.Seconds()),
 		CleanupDuration:   fmt.Sprintf("%.3fs", testResult.CleanupDuration.Seconds()),
 	}
@@ -336,6 +339,7 @@ func transformTestResult(testResult model.TestResult, testID int, suiteName, sui
 			{"Setup", testResult.SetupDuration, "phase-setup"},
 			{"Execution", testResult.ExecutionDuration, "phase-execution"},
 			{"Assertions", testResult.AssertionDuration, "phase-assertions"},
+			{"Teardown", testResult.TeardownDuration, "phase-teardown"},
 			{"Cleanup", testResult.CleanupDuration, "phase-cleanup"},
 		}
 		for _, p := range phases {
@@ -574,6 +578,52 @@ func transformTestResult(testResult model.TestResult, testID int, suiteName, sui
 			}
 		}
 		testData.SetupSteps = append(testData.SetupSteps, setupData)
+	}
+
+	// Teardown steps
+	for i, teardownResult := range testResult.TeardownResults {
+		teardownData := HTMLSetupStepData{
+			Type:     teardownResult.Type,
+			Duration: fmt.Sprintf("%.3fs", teardownResult.Duration.Seconds()),
+			Success:  teardownResult.Success,
+		}
+		if teardownResult.Success {
+			teardownData.StatusClass = "passed"
+		} else {
+			teardownData.StatusClass = "failed"
+			if teardownResult.Error != nil {
+				teardownData.Error = teardownResult.Error.Error()
+			}
+		}
+		if i < len(testResult.Test.Teardown) {
+			teardownDef := testResult.Test.Teardown[i]
+			if teardownDef.CLI != nil {
+				teardownData.CLIService = teardownDef.CLI.Service
+				teardownData.CLICommand = teardownDef.CLI.Command
+				teardownData.CLIWorkingDir = teardownDef.CLI.WorkingDir
+				teardownData.CLIExitCode = teardownResult.CLIExitCode
+			} else if teardownDef.HTTP != nil {
+				teardownData.HTTPTarget = teardownDef.HTTP.Target
+				teardownData.HTTPMethod = teardownDef.HTTP.Request.Method
+				teardownData.HTTPURL = teardownDef.HTTP.Request.URL
+				teardownData.HTTPStatusCode = teardownResult.HTTPStatusCode
+				teardownData.HTTPMethodClass = methodClassFor(teardownDef.HTTP.Request.Method)
+			}
+		}
+		// Cross-reference with exchanges/execs for inline data
+		for idx := range testData.HTTPExchanges {
+			if testData.HTTPExchanges[idx].Phase == "teardown" && testData.HTTPExchanges[idx].PhaseSeq == i {
+				teardownData.HTTPExchange = &testData.HTTPExchanges[idx]
+				break
+			}
+		}
+		for idx := range testData.CLIExecs {
+			if testData.CLIExecs[idx].Phase == "teardown" && testData.CLIExecs[idx].PhaseSeq == i {
+				teardownData.CLIExec = &testData.CLIExecs[idx]
+				break
+			}
+		}
+		testData.TeardownSteps = append(testData.TeardownSteps, teardownData)
 	}
 
 	// Artifacts
@@ -971,6 +1021,7 @@ const testPageTemplate = `<!DOCTYPE html>
         .phase-setup { background: #8b5cf6; }
         .phase-execution { background: #f59e0b; }
         .phase-assertions { background: #10b981; }
+        .phase-teardown { background: #ec4899; }
         .phase-cleanup { background: #64748b; }
         .phase-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; }
         .phase-legend-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-secondary); }
@@ -1216,6 +1267,54 @@ const testPageTemplate = `<!DOCTYPE html>
                 {{end}}
             {{else}}
                 <div class="empty">No assertions defined</div>
+            {{end}}
+            </div>
+        </details>
+
+        <details class="section" open>
+            <summary>Teardown <span class="section-count">({{len .TeardownSteps}})</span><span class="section-dur">{{.TeardownDuration}}</span></summary>
+            <div class="section-body">
+            {{if .TeardownSteps}}
+                {{range .TeardownSteps}}
+                <div class="setup-step">
+                    <div class="setup-header">
+                        <div class="setup-icon {{.StatusClass}}">{{if .Success}}&#10003;{{else}}&#10007;{{end}}</div>
+                        <span class="setup-type">{{if eq .Type "cli"}}CLI{{else}}HTTP{{end}}</span>
+                        {{if eq .Type "http"}}<span class="http-method {{.HTTPMethodClass}}">{{.HTTPMethod}}</span>{{end}}
+                        <span class="setup-dur">{{.Duration}}</span>
+                    </div>
+                    <div class="setup-body">
+                        {{if eq .Type "cli"}}
+                            <div style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:0.25rem;">{{.CLIService}}</div>
+                            <div class="code-block compact">{{.CLICommand}}</div>
+                            {{if .CLIWorkingDir}}<div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.25rem;">Working dir: {{.CLIWorkingDir}}</div>{{end}}
+                            {{if .CLIExec}}
+                            <div class="exchange">
+                                <div class="exchange-label">Exit Code</div>
+                                <span class="exit-code {{.CLIExec.ExitCodeClass}}">{{.CLIExec.ExitCode}}</span>
+                                {{if .CLIExec.Stdout}}<div class="exchange-label">Stdout</div><div class="code-block compact">{{.CLIExec.Stdout}}</div>{{end}}
+                                {{if .CLIExec.Stderr}}<div class="exchange-label">Stderr</div><div class="code-block compact">{{.CLIExec.Stderr}}</div>{{end}}
+                            </div>
+                            {{end}}
+                        {{else}}
+                            <div class="exchange-line"><span class="http-method {{.HTTPMethodClass}}">{{.HTTPMethod}}</span> {{.HTTPTarget}}{{.HTTPURL}}</div>
+                            {{if .HTTPExchange}}
+                            <div class="exchange">
+                                {{if .HTTPExchange.RequestHeaders}}<div class="exchange-label">Request Headers</div><div class="headers-list">{{range .HTTPExchange.RequestHeaders}}<div class="header-line"><span class="header-name">{{.Name}}:</span> <span class="header-val">{{.Values}}</span></div>{{end}}</div>{{end}}
+                                {{if .HTTPExchange.RequestBody}}<div class="exchange-label">Request Body</div><div class="code-block compact">{{.HTTPExchange.RequestBody}}</div>{{end}}
+                                <div class="exchange-label">Response</div>
+                                <div class="exchange-line"><span class="status-code {{.HTTPExchange.ResponseStatusClass}}">{{.HTTPExchange.ResponseStatusCode}}</span></div>
+                                {{if .HTTPExchange.ResponseHeaders}}<div class="headers-list" style="margin-top:0.25rem;">{{range .HTTPExchange.ResponseHeaders}}<div class="header-line"><span class="header-name">{{.Name}}:</span> <span class="header-val">{{.Values}}</span></div>{{end}}</div>{{end}}
+                                {{if .HTTPExchange.ResponseBody}}<div class="exchange-label">Response Body</div><div class="code-block compact">{{.HTTPExchange.ResponseBody}}</div>{{end}}
+                            </div>
+                            {{end}}
+                        {{end}}
+                        {{if .Error}}<div class="error-box" style="margin-top:0.5rem; font-size:0.75rem;">{{.Error}}</div>{{end}}
+                    </div>
+                </div>
+                {{end}}
+            {{else}}
+                <div class="empty">No teardown steps</div>
             {{end}}
             </div>
         </details>

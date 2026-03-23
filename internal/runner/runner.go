@@ -680,6 +680,20 @@ func (r *Runner) runTestWithServices(ctx context.Context, test model.Test, uuid 
 	result.ServicesDuration = servicesDuration
 	result.SetupDuration = setupDuration
 
+	// --- Teardown phase ---
+	if len(test.Teardown) > 0 {
+		teardownStart := time.Now()
+		teardownResults, teardownHTTPExchanges, teardownCLIExecutions, teardownErr := r.executeTeardown(ctx, test, dockerManager, uuid, suiteFilePath)
+		result.TeardownDuration = time.Since(teardownStart)
+		result.TeardownResults = teardownResults
+		result.HTTPExchanges = append(result.HTTPExchanges, teardownHTTPExchanges...)
+		result.CLIExecutions = append(result.CLIExecutions, teardownCLIExecutions...)
+		if teardownErr != nil {
+			result.Status = model.StatusError
+			result.Error = fmt.Errorf("teardown failed: %w", teardownErr)
+		}
+	}
+
 	return result
 }
 
@@ -830,6 +844,163 @@ func (r *Runner) executeSetup(ctx context.Context, test model.Test, dockerManage
 			setupResult.Type = "unknown"
 			setupResult.Success = false
 			setupResult.Error = fmt.Errorf("setup instruction has neither CLI nor HTTP configuration")
+			results = append(results, setupResult)
+			return results, httpExchanges, cliExecutions, setupResult.Error
+		}
+
+		results = append(results, setupResult)
+	}
+
+	return results, httpExchanges, cliExecutions, nil
+}
+
+// executeTeardown executes all teardown instructions for a test.
+func (r *Runner) executeTeardown(ctx context.Context, test model.Test, dockerManager *docker.Manager, uuid string, suiteFilePath string) ([]model.SetupResult, []model.HTTPExchangeResult, []model.CLIExecutionResult, error) {
+	var results []model.SetupResult
+	var httpExchanges []model.HTTPExchangeResult
+	var cliExecutions []model.CLIExecutionResult
+
+	for i, instruction := range test.Teardown {
+		r.emit(ctx).Info(events.Fields{
+			"test":   test.Name,
+			"action": "teardown_start",
+			"step":   fmt.Sprintf("%d/%d", i+1, len(test.Teardown)),
+			"msg":    "Executing teardown instruction",
+		})
+
+		startTime := time.Now()
+		var setupResult model.SetupResult
+
+		if instruction.CLI != nil {
+			// Execute CLI command
+			setupResult.Type = "cli"
+
+			r.emit(ctx).Info(events.Fields{
+				"test":    test.Name,
+				"action":  "teardown_cli",
+				"service": instruction.CLI.Service,
+				"msg":     fmt.Sprintf("Running CLI: %s", instruction.CLI.Command),
+			})
+
+			execResult, err := dockerManager.ExecInContainer(
+				ctx,
+				instruction.CLI.Service,
+				instruction.CLI.Command,
+				instruction.CLI.WorkingDir,
+				nil,
+			)
+			setupResult.Duration = time.Since(startTime)
+
+			cliExec := model.CLIExecutionResult{
+				Phase:      "teardown",
+				PhaseSeq:   i,
+				Service:    instruction.CLI.Service,
+				Command:    instruction.CLI.Command,
+				WorkingDir: instruction.CLI.WorkingDir,
+				Duration:   setupResult.Duration,
+			}
+
+			if err != nil {
+				setupResult.Success = false
+				setupResult.Error = err
+				cliExec.Error = err
+				cliExecutions = append(cliExecutions, cliExec)
+				results = append(results, setupResult)
+				return results, httpExchanges, cliExecutions, fmt.Errorf("teardown CLI command failed: %w", err)
+			}
+
+			cliExec.ExitCode = execResult.ExitCode
+			cliExec.Stdout = string(execResult.Stdout)
+			cliExec.Stderr = string(execResult.Stderr)
+			cliExecutions = append(cliExecutions, cliExec)
+
+			setupResult.CLIExitCode = execResult.ExitCode
+			if execResult.ExitCode != 0 {
+				setupResult.Success = false
+				setupResult.Error = fmt.Errorf("CLI command exited with code %d: %s", execResult.ExitCode, string(execResult.Stderr))
+				results = append(results, setupResult)
+				return results, httpExchanges, cliExecutions, setupResult.Error
+			}
+
+			setupResult.Success = true
+			r.emit(ctx).Info(events.Fields{
+				"test":     test.Name,
+				"action":   "teardown_cli_complete",
+				"exitCode": fmt.Sprintf("%d", execResult.ExitCode),
+				"duration": fmt.Sprintf("%.3fs", setupResult.Duration.Seconds()),
+				"msg":      "CLI teardown completed",
+			})
+
+		} else if instruction.HTTP != nil {
+			// Execute HTTP request
+			setupResult.Type = "http"
+
+			// Build execution from teardown HTTP config
+			execution := model.Execution{
+				Executor: model.ExecutorHTTP,
+				Target:   instruction.HTTP.Target,
+				Request:  instruction.HTTP.Request,
+			}
+
+			r.emit(ctx).Info(events.Fields{
+				"test":   test.Name,
+				"action": "teardown_http",
+				"target": instruction.HTTP.Target + instruction.HTTP.Request.URL,
+				"msg":    fmt.Sprintf("Running HTTP %s request", instruction.HTTP.Request.Method),
+			})
+
+			response, err := r.executeHTTPInNetwork(ctx, execution, dockerManager, uuid, suiteFilePath)
+			setupResult.Duration = time.Since(startTime)
+
+			requestBody := instruction.HTTP.Request.Body.DisplayString()
+			httpExchange := model.HTTPExchangeResult{
+				Phase:          "teardown",
+				PhaseSeq:       i,
+				RequestMethod:  instruction.HTTP.Request.Method,
+				RequestURL:     instruction.HTTP.Target + instruction.HTTP.Request.URL,
+				RequestHeaders: instruction.HTTP.Request.Headers,
+				RequestBody:    requestBody,
+				Duration:       setupResult.Duration,
+			}
+
+			if err != nil {
+				setupResult.Success = false
+				setupResult.Error = err
+				httpExchange.Error = err
+				httpExchanges = append(httpExchanges, httpExchange)
+				results = append(results, setupResult)
+				return results, httpExchanges, cliExecutions, fmt.Errorf("teardown HTTP request failed: %w", err)
+			}
+
+			httpExchange.ResponseStatusCode = response.StatusCode
+			httpExchange.ResponseHeaders = response.Headers
+			httpExchange.ResponseBody = string(response.Body)
+			httpExchanges = append(httpExchanges, httpExchange)
+
+			setupResult.HTTPStatusCode = response.StatusCode
+			// Consider 2xx and 3xx as success for teardown
+			if response.StatusCode >= 200 && response.StatusCode < 400 {
+				setupResult.Success = true
+			} else {
+				setupResult.Success = false
+				setupResult.Error = fmt.Errorf("HTTP request returned status %d", response.StatusCode)
+				results = append(results, setupResult)
+				return results, httpExchanges, cliExecutions, setupResult.Error
+			}
+
+			r.emit(ctx).Info(events.Fields{
+				"test":     test.Name,
+				"action":   "teardown_http_complete",
+				"status":   fmt.Sprintf("%d", response.StatusCode),
+				"duration": fmt.Sprintf("%.3fs", setupResult.Duration.Seconds()),
+				"msg":      "HTTP teardown completed",
+			})
+
+		} else {
+			// Invalid instruction - neither CLI nor HTTP
+			setupResult.Type = "unknown"
+			setupResult.Success = false
+			setupResult.Error = fmt.Errorf("teardown instruction has neither CLI nor HTTP configuration")
 			results = append(results, setupResult)
 			return results, httpExchanges, cliExecutions, setupResult.Error
 		}
