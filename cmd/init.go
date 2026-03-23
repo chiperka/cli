@@ -54,8 +54,8 @@ tests:
         method: GET
         url: /
     assertions:
-      - statusCode:
-          equals: 200
+      - response:
+          statusCode: 200
 `
 
 const apiSparkContent = `name: API tests
@@ -71,8 +71,8 @@ tests:
         method: GET
         url: /
     assertions:
-      - statusCode:
-          equals: 200
+      - response:
+          statusCode: 200
 
   - name: Returns 404 for missing page
     services:
@@ -84,8 +84,8 @@ tests:
         method: GET
         url: /missing-page
     assertions:
-      - statusCode:
-          equals: 404
+      - response:
+          statusCode: 404
 `
 
 func runInit(cmd *cobra.Command, args []string) error {
