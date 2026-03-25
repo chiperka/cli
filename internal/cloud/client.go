@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -358,8 +357,7 @@ func CollectSnapshotFiles(suites []SuiteSubmission) (map[string][]byte, error) {
 					absPath := filepath.Join(suiteDir, snapshotRelPath)
 					absPath, err := filepath.Abs(absPath)
 					if err != nil {
-						log.Printf("Warning: could not resolve snapshot path %s: %v", snapshotRelPath, err)
-						continue
+						return nil, fmt.Errorf("could not resolve snapshot path %s: %w", snapshotRelPath, err)
 					}
 
 					if seen[absPath] {
@@ -369,8 +367,7 @@ func CollectSnapshotFiles(suites []SuiteSubmission) (map[string][]byte, error) {
 
 					content, err := os.ReadFile(absPath)
 					if err != nil {
-						log.Printf("Warning: could not read snapshot file %s: %v", absPath, err)
-						continue
+						return nil, fmt.Errorf("snapshot file %s not found (referenced in %s): %w", absPath, suite.FilePath, err)
 					}
 
 					// Key is the path relative to CLI working directory, using forward slashes
