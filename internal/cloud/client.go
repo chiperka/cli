@@ -402,27 +402,43 @@ func (c *Client) UploadSnapshots(runID string, snapshots map[string][]byte) erro
 		return fmt.Errorf("failed to finalize zip: %w", err)
 	}
 
-	// Upload to API
+	// Upload to API with extended timeout (snapshot ZIPs can be large)
 	endpoint := fmt.Sprintf("%s/api/runs/%s/snapshots", c.baseURL, runID)
-	req, err := http.NewRequest("POST", endpoint, &buf)
-	if err != nil {
-		return fmt.Errorf("failed to create snapshot upload request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/zip")
-	c.setAuth(req)
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to upload snapshots: %w", err)
-	}
-	defer resp.Body.Close()
+	uploadClient := &http.Client{Timeout: 5 * time.Minute}
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		req, err := http.NewRequest("POST", endpoint, bytes.NewReader(buf.Bytes()))
+		if err != nil {
+			return fmt.Errorf("failed to create snapshot upload request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/zip")
+		c.setAuth(req)
+
+		resp, err := uploadClient.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to upload snapshots (attempt %d): %w", attempt+1, err)
+			time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusNoContent {
+			return nil
+		}
+
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("snapshot upload failed with status %d: %s", resp.StatusCode, string(body))
+		lastErr = fmt.Errorf("snapshot upload failed with status %d: %s", resp.StatusCode, string(body))
+
+		if resp.StatusCode >= 500 {
+			time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+			continue
+		}
+		return lastErr
 	}
 
-	return nil
+	return lastErr
 }
 
 // ResolveProject resolves a project slug to its numeric ID.
