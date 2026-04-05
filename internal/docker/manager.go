@@ -21,9 +21,9 @@ import (
 	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 
-	"spark-cli/internal/artifact"
-	"spark-cli/internal/events"
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/artifact"
+	"chiperka-cli/internal/events"
+	"chiperka-cli/internal/model"
 )
 
 // Manager handles Docker container lifecycle for test services.
@@ -212,7 +212,7 @@ func NewManager(emitter *events.Emitter, testName string) (*Manager, error) {
 	if _, err := rand.Read(randomBytes); err != nil {
 		return nil, fmt.Errorf("failed to generate random network name: %w", err)
 	}
-	networkName := fmt.Sprintf("spark-%s", hex.EncodeToString(randomBytes))
+	networkName := fmt.Sprintf("chiperka-%s", hex.EncodeToString(randomBytes))
 
 	emitter.Info(events.Fields{
 		"test":    testName,
@@ -275,7 +275,7 @@ func NewManagerWithPool(emitter *events.Emitter, testName string, pool *NetworkP
 }
 
 // createNetworkWithRetry creates a Docker network, retrying once after cleaning stale
-// spark networks if the first attempt fails due to address pool exhaustion.
+// chiperka networks if the first attempt fails due to address pool exhaustion.
 func createNetworkWithRetry(networkName string, emitter *events.Emitter) (string, error) {
 	resp, err := dockerClient.NetworkCreate(context.Background(), networkName, network.CreateOptions{})
 	if err == nil {
@@ -287,10 +287,10 @@ func createNetworkWithRetry(networkName string, emitter *events.Emitter) (string
 		return "", err
 	}
 
-	// Address pool exhausted — clean up stale spark networks and retry
+	// Address pool exhausted — clean up stale chiperka networks and retry
 	emitter.Warn(events.Fields{
 		"action": "network_pool_exhausted",
-		"msg":    "Docker network pool exhausted, cleaning up stale spark networks",
+		"msg":    "Docker network pool exhausted, cleaning up stale chiperka networks",
 	})
 	CleanupStaleNetworks()
 
@@ -301,12 +301,12 @@ func createNetworkWithRetry(networkName string, emitter *events.Emitter) (string
 	return resp.ID, nil
 }
 
-// CleanupStaleNetworks removes all spark- networks that have no running containers.
+// CleanupStaleNetworks removes all chiperka- networks that have no running containers.
 func CleanupStaleNetworks() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	networks, err := dockerClient.NetworkList(ctx, network.ListOptions{
-		Filters: filters.NewArgs(filters.Arg("name", "spark-")),
+		Filters: filters.NewArgs(filters.Arg("name", "chiperka-")),
 	})
 	if err != nil {
 		return
@@ -764,7 +764,7 @@ func (m *Manager) RunInNetwork(ctx context.Context, image string, command []stri
 
 // RunInNetworkWithFiles executes a command in the isolated network with files
 // copied into the container before starting. The files map keys are paths
-// relative to / (e.g. "tmp/spark-body" becomes /tmp/spark-body).
+// relative to / (e.g. "tmp/chiperka-body" becomes /tmp/chiperka-body).
 func (m *Manager) RunInNetworkWithFiles(ctx context.Context, image string, command []string, files map[string][]byte) ([]byte, error) {
 	cfg := &container.Config{
 		Image: image,

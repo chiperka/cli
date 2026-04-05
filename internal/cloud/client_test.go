@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/model"
 )
 
 func TestClient_HealthCheck_OK(t *testing.T) {
@@ -133,7 +133,7 @@ func TestClient_BuildSubmission_Basic(t *testing.T) {
 	tests := model.NewTestCollection()
 	tests.AddSuite(model.Suite{
 		Name:     "suite1",
-		FilePath: "tests/suite1.spark",
+		FilePath: "tests/suite1.chiperka",
 		Tests: []model.Test{
 			{Name: "t1"},
 			{Name: "t2"},

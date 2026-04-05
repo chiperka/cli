@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"spark-cli/internal/config"
-	"spark-cli/internal/finder"
-	"spark-cli/internal/model"
-	"spark-cli/internal/parser"
+	"chiperka-cli/internal/config"
+	"chiperka-cli/internal/finder"
+	"chiperka-cli/internal/model"
+	"chiperka-cli/internal/parser"
 )
 
 var validateJSON bool
@@ -21,7 +21,7 @@ var validateConfigFile string
 var validateCmd = &cobra.Command{
 	Use:   "validate [path]",
 	Short: "Validate test files without executing them",
-	Long: `Validate checks spark test files for structural and semantic errors
+	Long: `Validate checks chiperka test files for structural and semantic errors
 without starting any Docker containers or executing tests.
 
 Catches issues like missing service images, broken template references,
@@ -33,11 +33,11 @@ Exit codes:
   3  Validation errors found in test files
 
 Example:
-  spark validate ./tests
-  spark validate ./tests/auth.spark
-  spark validate ./tests --json
-  spark validate ./tests --tags smoke
-  spark validate ./tests --filter "login*"`,
+  chiperka validate ./tests
+  chiperka validate ./tests/auth.chiperka
+  chiperka validate ./tests --json
+  chiperka validate ./tests --tags smoke
+  chiperka validate ./tests --filter "login*"`,
 	Args:          cobra.MaximumNArgs(1),
 	SilenceUsage:  true,
 	SilenceErrors: true,
@@ -49,7 +49,7 @@ func init() {
 	validateCmd.Flags().BoolVar(&validateJSON, "json", false, "Output NDJSON for machine consumption")
 	validateCmd.Flags().StringSliceVar(&validateTags, "tags", nil, "Validate only tests with specified tags")
 	validateCmd.Flags().StringVar(&validateFilter, "filter", "", "Validate only tests matching pattern")
-	validateCmd.Flags().StringVar(&validateConfigFile, "configuration", "", "Path to spark.yaml configuration file (auto-discovered if not set)")
+	validateCmd.Flags().StringVar(&validateConfigFile, "configuration", "", "Path to chiperka.yaml configuration file (auto-discovered if not set)")
 }
 
 type validationIssue struct {
@@ -74,7 +74,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 
 	// Find test files
 	var files []string
-	if !info.IsDir() && strings.HasSuffix(searchPath, ".spark") {
+	if !info.IsDir() && strings.HasSuffix(searchPath, ".chiperka") {
 		files = []string{searchPath}
 	} else {
 		f := finder.New(searchPath)
@@ -85,7 +85,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(files) == 0 {
-		fmt.Printf("No *.spark files found in %s\n", searchPath)
+		fmt.Printf("No *.chiperka files found in %s\n", searchPath)
 		return nil
 	}
 

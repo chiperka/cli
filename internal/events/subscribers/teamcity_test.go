@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"spark-cli/internal/events"
+	"chiperka-cli/internal/events"
 )
 
 // newTeamCityTest creates a TeamCityReporter with a buffer for testing.
@@ -125,19 +125,19 @@ func TestPassingTest_FullLifecycle(t *testing.T) {
 	buf.Reset()
 
 	// Test started
-	bus.Emit(testEvent(events.TestStarted, "auth-suite", "login-test", "/tests/auth.spark"))
+	bus.Emit(testEvent(events.TestStarted, "auth-suite", "login-test", "/tests/auth.chiperka"))
 
 	// Test completed
-	bus.Emit(testEvent(events.TestCompleted, "auth-suite", "login-test", "/tests/auth.spark").
+	bus.Emit(testEvent(events.TestCompleted, "auth-suite", "login-test", "/tests/auth.chiperka").
 		WithDuration(1234 * time.Millisecond))
 
 	output := buf.String()
 
 	// Line 0: testSuiteStarted
-	assertLine(t, output, 0, "##teamcity[testSuiteStarted name='auth-suite' nodeId='auth-suite' parentNodeId='0' locationHint='spark:///tests/auth.spark' flowId='12345']")
+	assertLine(t, output, 0, "##teamcity[testSuiteStarted name='auth-suite' nodeId='auth-suite' parentNodeId='0' locationHint='chiperka:///tests/auth.chiperka' flowId='12345']")
 
 	// Line 1: testStarted
-	assertLine(t, output, 1, "##teamcity[testStarted name='login-test' nodeId='auth-suite/login-test' parentNodeId='auth-suite' locationHint='spark:///tests/auth.spark::login-test' flowId='12345']")
+	assertLine(t, output, 1, "##teamcity[testStarted name='login-test' nodeId='auth-suite/login-test' parentNodeId='auth-suite' locationHint='chiperka:///tests/auth.chiperka::login-test' flowId='12345']")
 
 	// Line 2: testFinished
 	assertLine(t, output, 2, "##teamcity[testFinished name='login-test' nodeId='auth-suite/login-test' duration='1234' flowId='12345']")
@@ -161,7 +161,7 @@ func TestFailingTest_SingleAssertion(t *testing.T) {
 	buf.Reset()
 
 	// Test started
-	bus.Emit(testEvent(events.TestStarted, "api", "status-check", "/tests/api.spark"))
+	bus.Emit(testEvent(events.TestStarted, "api", "status-check", "/tests/api.chiperka"))
 
 	// Assertion fail via log event (this is the primary path used by the runner)
 	logEvent := events.NewTestEvent(events.LogFail, "api", "status-check")
@@ -172,7 +172,7 @@ func TestFailingTest_SingleAssertion(t *testing.T) {
 	bus.Emit(logEvent)
 
 	// Test failed
-	bus.Emit(testEvent(events.TestFailed, "api", "status-check", "/tests/api.spark").
+	bus.Emit(testEvent(events.TestFailed, "api", "status-check", "/tests/api.chiperka").
 		WithDuration(500 * time.Millisecond))
 
 	output := buf.String()
@@ -288,7 +288,7 @@ func TestSkippedTest(t *testing.T) {
 		WithDetail("suiteCounts", map[string]int{"suite": 1}))
 	buf.Reset()
 
-	e := testEvent(events.TestSkipped, "suite", "skip-test", "/tests/skip.spark")
+	e := testEvent(events.TestSkipped, "suite", "skip-test", "/tests/skip.chiperka")
 	e.Data.Message = "requires postgres"
 	bus.Emit(e)
 
@@ -369,16 +369,16 @@ func TestSuiteAutoClose_WhenAllTestsDone(t *testing.T) {
 	buf.Reset()
 
 	// First test
-	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/f.spark"))
-	bus.Emit(testEvent(events.TestCompleted, "suite", "test1", "/f.spark").
+	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/f.chiperka"))
+	bus.Emit(testEvent(events.TestCompleted, "suite", "test1", "/f.chiperka").
 		WithDuration(100 * time.Millisecond))
 
 	// Suite should NOT be closed yet (1 of 2 done)
 	assertNotContains(t, buf.String(), "testSuiteFinished")
 
 	// Second test
-	bus.Emit(testEvent(events.TestStarted, "suite", "test2", "/f.spark"))
-	bus.Emit(testEvent(events.TestCompleted, "suite", "test2", "/f.spark").
+	bus.Emit(testEvent(events.TestStarted, "suite", "test2", "/f.chiperka"))
+	bus.Emit(testEvent(events.TestCompleted, "suite", "test2", "/f.chiperka").
 		WithDuration(200 * time.Millisecond))
 
 	// Now suite should be closed
@@ -411,15 +411,15 @@ func TestMultipleSuites_IndependentLifecycles(t *testing.T) {
 	buf.Reset()
 
 	// Auth suite — single test
-	bus.Emit(testEvent(events.TestStarted, "auth", "login", "/auth.spark"))
-	bus.Emit(testEvent(events.TestCompleted, "auth", "login", "/auth.spark").WithDuration(100 * time.Millisecond))
+	bus.Emit(testEvent(events.TestStarted, "auth", "login", "/auth.chiperka"))
+	bus.Emit(testEvent(events.TestCompleted, "auth", "login", "/auth.chiperka").WithDuration(100 * time.Millisecond))
 
 	// Auth suite should be closed
 	assertContains(t, buf.String(), "##teamcity[testSuiteFinished name='auth'")
 
 	// API suite — 2 tests, only 1 done so far
-	bus.Emit(testEvent(events.TestStarted, "api", "get-users", "/api.spark"))
-	bus.Emit(testEvent(events.TestCompleted, "api", "get-users", "/api.spark").WithDuration(200 * time.Millisecond))
+	bus.Emit(testEvent(events.TestStarted, "api", "get-users", "/api.chiperka"))
+	bus.Emit(testEvent(events.TestCompleted, "api", "get-users", "/api.chiperka").WithDuration(200 * time.Millisecond))
 
 	// Count suiteFinished for api — should be 0
 	apiFinishCount := strings.Count(buf.String(), "testSuiteFinished name='api'")
@@ -428,8 +428,8 @@ func TestMultipleSuites_IndependentLifecycles(t *testing.T) {
 	}
 
 	// Second API test
-	bus.Emit(testEvent(events.TestStarted, "api", "create-user", "/api.spark"))
-	bus.Emit(testEvent(events.TestCompleted, "api", "create-user", "/api.spark").WithDuration(300 * time.Millisecond))
+	bus.Emit(testEvent(events.TestStarted, "api", "create-user", "/api.chiperka"))
+	bus.Emit(testEvent(events.TestCompleted, "api", "create-user", "/api.chiperka").WithDuration(300 * time.Millisecond))
 
 	assertContains(t, buf.String(), "##teamcity[testSuiteFinished name='api'")
 }
@@ -444,8 +444,8 @@ func TestSuiteStarted_OnlyOnce(t *testing.T) {
 		WithDetail("suiteCounts", map[string]int{"suite": 2}))
 	buf.Reset()
 
-	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/f.spark"))
-	bus.Emit(testEvent(events.TestStarted, "suite", "test2", "/f.spark"))
+	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/f.chiperka"))
+	bus.Emit(testEvent(events.TestStarted, "suite", "test2", "/f.chiperka"))
 
 	count := strings.Count(buf.String(), "testSuiteStarted")
 	if count != 1 {
@@ -459,8 +459,8 @@ func TestTestWithoutSuite(t *testing.T) {
 	bus, _, buf := newTeamCityTest(t)
 
 	bus.Emit(events.NewEvent(events.RunStarted).WithDetail("tests", 1))
-	bus.Emit(testEvent(events.TestStarted, "", "standalone-test", "/test.spark"))
-	bus.Emit(testEvent(events.TestCompleted, "", "standalone-test", "/test.spark").
+	bus.Emit(testEvent(events.TestStarted, "", "standalone-test", "/test.chiperka"))
+	bus.Emit(testEvent(events.TestCompleted, "", "standalone-test", "/test.chiperka").
 		WithDuration(100 * time.Millisecond))
 
 	output := buf.String()
@@ -479,15 +479,15 @@ func TestLocationHint_WithFilePath(t *testing.T) {
 	bus, _, buf := newTeamCityTest(t)
 
 	bus.Emit(events.NewEvent(events.RunStarted).WithDetail("tests", 1))
-	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/path/to/test.spark"))
+	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/path/to/test.chiperka"))
 
 	output := buf.String()
 
 	// Suite location hint (file path only)
-	assertContains(t, output, "locationHint='spark:///path/to/test.spark'")
+	assertContains(t, output, "locationHint='chiperka:///path/to/test.chiperka'")
 
 	// Test location hint (file path + test name)
-	assertContains(t, output, "locationHint='spark:///path/to/test.spark::test1'")
+	assertContains(t, output, "locationHint='chiperka:///path/to/test.chiperka::test1'")
 }
 
 func TestLocationHint_WithoutFilePath(t *testing.T) {
@@ -511,11 +511,11 @@ func TestPathMapping(t *testing.T) {
 	})
 
 	bus.Emit(events.NewEvent(events.RunStarted).WithDetail("tests", 1))
-	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/container/path/tests/auth.spark"))
+	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/container/path/tests/auth.chiperka"))
 
 	output := buf.String()
-	assertContains(t, output, "locationHint='spark:///host/path/tests/auth.spark::test1'")
-	assertContains(t, output, "locationHint='spark:///host/path/tests/auth.spark'")
+	assertContains(t, output, "locationHint='chiperka:///host/path/tests/auth.chiperka::test1'")
+	assertContains(t, output, "locationHint='chiperka:///host/path/tests/auth.chiperka'")
 }
 
 func TestPathMapping_NoMatch(t *testing.T) {
@@ -525,10 +525,10 @@ func TestPathMapping_NoMatch(t *testing.T) {
 	})
 
 	bus.Emit(events.NewEvent(events.RunStarted).WithDetail("tests", 1))
-	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/other/path/test.spark"))
+	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/other/path/test.chiperka"))
 
 	output := buf.String()
-	assertContains(t, output, "locationHint='spark:///other/path/test.spark::test1'")
+	assertContains(t, output, "locationHint='chiperka:///other/path/test.chiperka::test1'")
 }
 
 // --- Duration format ---
@@ -561,8 +561,8 @@ func TestFlowId_PresentOnAllMessages(t *testing.T) {
 	bus.Emit(events.NewEvent(events.RunStarted).
 		WithDetail("tests", 1).
 		WithDetail("suiteCounts", map[string]int{"suite": 1}))
-	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/f.spark"))
-	bus.Emit(testEvent(events.TestCompleted, "suite", "test1", "/f.spark").
+	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/f.chiperka"))
+	bus.Emit(testEvent(events.TestCompleted, "suite", "test1", "/f.chiperka").
 		WithDuration(100 * time.Millisecond))
 
 	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
@@ -1070,23 +1070,23 @@ func TestFullRun_MixedResults(t *testing.T) {
 		WithDetail("suiteCounts", map[string]int{"api": 3}))
 
 	// Test 1: passes
-	bus.Emit(testEvent(events.TestStarted, "api", "get-health", "/api.spark"))
-	bus.Emit(testEvent(events.TestCompleted, "api", "get-health", "/api.spark").
+	bus.Emit(testEvent(events.TestStarted, "api", "get-health", "/api.chiperka"))
+	bus.Emit(testEvent(events.TestCompleted, "api", "get-health", "/api.chiperka").
 		WithDuration(100 * time.Millisecond))
 
 	// Test 2: fails
-	bus.Emit(testEvent(events.TestStarted, "api", "post-login", "/api.spark"))
+	bus.Emit(testEvent(events.TestStarted, "api", "post-login", "/api.chiperka"))
 	failLog := events.NewTestEvent(events.LogFail, "api", "post-login")
 	failLog.Data.Message = "statusCode == 200"
 	failLog.Data.Details["action"] = "assertion_fail"
 	failLog.Data.Details["expected"] = "200"
 	failLog.Data.Details["actual"] = "401"
 	bus.Emit(failLog)
-	bus.Emit(testEvent(events.TestFailed, "api", "post-login", "/api.spark").
+	bus.Emit(testEvent(events.TestFailed, "api", "post-login", "/api.chiperka").
 		WithDuration(200 * time.Millisecond))
 
 	// Test 3: skipped
-	e := testEvent(events.TestSkipped, "api", "delete-user", "/api.spark")
+	e := testEvent(events.TestSkipped, "api", "delete-user", "/api.chiperka")
 	e.Data.Message = "requires admin"
 	bus.Emit(e)
 
@@ -1168,19 +1168,19 @@ func TestWriteServiceMessage_DeterministicOrder(t *testing.T) {
 		WithDetail("suiteCounts", map[string]int{"suite": 1}))
 	buf.Reset()
 
-	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/test.spark"))
+	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/test.chiperka"))
 
 	line := strings.TrimRight(buf.String(), "\n")
 	lines := strings.Split(line, "\n")
 
 	// testSuiteStarted
-	expected := "##teamcity[testSuiteStarted name='suite' nodeId='suite' parentNodeId='0' locationHint='spark:///test.spark' flowId='12345']"
+	expected := "##teamcity[testSuiteStarted name='suite' nodeId='suite' parentNodeId='0' locationHint='chiperka:///test.chiperka' flowId='12345']"
 	if lines[0] != expected {
 		t.Errorf("testSuiteStarted mismatch\nexpected: %s\n  actual: %s", expected, lines[0])
 	}
 
 	// testStarted - attributes in exact order: name, nodeId, parentNodeId, locationHint, flowId
-	expected = "##teamcity[testStarted name='test1' nodeId='suite/test1' parentNodeId='suite' locationHint='spark:///test.spark::test1' flowId='12345']"
+	expected = "##teamcity[testStarted name='test1' nodeId='suite/test1' parentNodeId='suite' locationHint='chiperka:///test.chiperka::test1' flowId='12345']"
 	if lines[1] != expected {
 		t.Errorf("testStarted mismatch\nexpected: %s\n  actual: %s", expected, lines[1])
 	}
@@ -1190,17 +1190,17 @@ func TestWriteServiceMessage_DeterministicOrder(t *testing.T) {
 
 func TestMapPath(t *testing.T) {
 	tc := &TeamCityReporter{
-		pathMappingFrom: "/srv/spark",
-		pathMappingTo:   "/Users/dev/spark",
+		pathMappingFrom: "/srv/chiperka",
+		pathMappingTo:   "/Users/dev/chiperka",
 	}
 
 	tests := []struct {
 		input    string
 		expected string
 	}{
-		{"/srv/spark/tests/auth.spark", "/Users/dev/spark/tests/auth.spark"},
-		{"/other/path/test.spark", "/other/path/test.spark"},
-		{"/srv/sparkle/test.spark", "/Users/dev/sparkle/test.spark"}, // prefix match (HasPrefix)
+		{"/srv/chiperka/tests/auth.chiperka", "/Users/dev/chiperka/tests/auth.chiperka"},
+		{"/other/path/test.chiperka", "/other/path/test.chiperka"},
+		{"/srv/chiperkale/test.chiperka", "/Users/dev/chiperkale/test.chiperka"}, // prefix match (HasPrefix)
 		{"", ""},
 	}
 	for _, tt := range tests {

@@ -1,6 +1,6 @@
-# Spark — Declarative API & Integration Test Runner
+# Chiperka — Declarative API & Integration Test Runner
 
-[Spark](https://about.chiperka.com/) is a YAML-based test runner for APIs and integrations. Define services, HTTP requests, and assertions in `.spark` files — Spark handles Docker containers, health checks, execution, and cleanup.
+[Chiperka](https://about.chiperka.com/) is a YAML-based test runner for APIs and integrations. Define services, HTTP requests, and assertions in `.chiperka` files — Chiperka handles Docker containers, health checks, execution, and cleanup.
 
 ## CLI
 
@@ -17,6 +17,6 @@ Docker is required for local use. Cloud mode (`--cloud`) runs tests on a remote 
 
 ## JetBrains Plugin
 
-Run `.spark` tests directly from PhpStorm, IntelliJ IDEA, WebStorm, and other JetBrains IDEs — gutter play buttons, Test Runner integration, and schema validation.
+Run `.chiperka` tests directly from PhpStorm, IntelliJ IDEA, WebStorm, and other JetBrains IDEs — gutter play buttons, Test Runner integration, and schema validation.
 
-**[Install from JetBrains Marketplace](https://plugins.jetbrains.com/plugin/30418-spark-test-runner)** · **[Plugin documentation](https://about.chiperka.com/ide-plugin)**
+**[Install from JetBrains Marketplace](https://plugins.jetbrains.com/plugin/30418-chiperka-test-runner)** · **[Plugin documentation](https://about.chiperka.com/ide-plugin)**

@@ -4,11 +4,11 @@ import (
 	"errors"
 	"testing"
 
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/model"
 )
 
 func TestValidateTest_Valid(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "valid-test",
 		Services: []model.Service{
@@ -32,7 +32,7 @@ func TestValidateTest_Valid(t *testing.T) {
 }
 
 func TestValidateTest_NoServices(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "no-services",
 		Execution: model.Execution{
@@ -51,7 +51,7 @@ func TestValidateTest_NoServices(t *testing.T) {
 }
 
 func TestValidateTest_EmptyImage(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "empty-image",
 		Services: []model.Service{
@@ -73,7 +73,7 @@ func TestValidateTest_EmptyImage(t *testing.T) {
 }
 
 func TestValidateTest_BrokenRef(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "broken-ref",
 		Services: []model.Service{
@@ -95,7 +95,7 @@ func TestValidateTest_BrokenRef(t *testing.T) {
 }
 
 func TestValidateTest_ValidRef(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "valid-ref",
 		Services: []model.Service{
@@ -127,7 +127,7 @@ func TestValidateTest_ValidRef(t *testing.T) {
 }
 
 func TestValidateTest_RefEmptyImage(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "ref-no-image",
 		Services: []model.Service{
@@ -155,7 +155,7 @@ func TestValidateTest_RefEmptyImage(t *testing.T) {
 }
 
 func TestValidateTest_MissingTarget(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "no-target",
 		Services: []model.Service{
@@ -176,7 +176,7 @@ func TestValidateTest_MissingTarget(t *testing.T) {
 }
 
 func TestValidateTest_MissingMethod(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "no-method",
 		Services: []model.Service{
@@ -197,7 +197,7 @@ func TestValidateTest_MissingMethod(t *testing.T) {
 }
 
 func TestValidateTest_CLIExecutor(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "valid-cli",
 		Services: []model.Service{
@@ -223,7 +223,7 @@ func TestValidateTest_CLIExecutor(t *testing.T) {
 }
 
 func TestValidateTest_CLIMissingConfig(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "cli-no-config",
 		Services: []model.Service{
@@ -243,7 +243,7 @@ func TestValidateTest_CLIMissingConfig(t *testing.T) {
 }
 
 func TestValidateTest_CLIMissingService(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "cli-no-service",
 		Services: []model.Service{
@@ -266,7 +266,7 @@ func TestValidateTest_CLIMissingService(t *testing.T) {
 }
 
 func TestValidateTest_CLIMissingCommand(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "cli-no-command",
 		Services: []model.Service{
@@ -289,7 +289,7 @@ func TestValidateTest_CLIMissingCommand(t *testing.T) {
 }
 
 func TestValidateTest_UnknownExecutor(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "bad-executor",
 		Services: []model.Service{
@@ -306,7 +306,7 @@ func TestValidateTest_UnknownExecutor(t *testing.T) {
 }
 
 func TestValidateTest_NoAssertionsWarning(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Name: "no-assertions",
 		Services: []model.Service{
@@ -331,7 +331,7 @@ func TestValidateTest_NoAssertionsWarning(t *testing.T) {
 }
 
 func TestValidateTest_EmptyName(t *testing.T) {
-	suite := model.Suite{Name: "Suite", FilePath: "test.spark"}
+	suite := model.Suite{Name: "Suite", FilePath: "test.chiperka"}
 	test := model.Test{
 		Services: []model.Service{
 			{Name: "api", Image: "nginx:alpine"},

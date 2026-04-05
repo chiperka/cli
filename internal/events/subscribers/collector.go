@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"spark-cli/internal/events"
+	"chiperka-cli/internal/events"
 )
 
 // EventCollector stores all events in memory for later processing.

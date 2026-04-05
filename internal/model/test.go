@@ -607,7 +607,7 @@ type SetupInstruction struct {
 	CLI *CLICommand `yaml:"cli,omitempty" json:"cli,omitempty"`
 }
 
-// Test represents a single test case loaded from a spark.yaml file.
+// Test represents a single test case loaded from a chiperka.yaml file.
 type Test struct {
 	Name        string             `yaml:"name" json:"name"`
 	Description string             `yaml:"description,omitempty" json:"description,omitempty"`
@@ -641,7 +641,7 @@ func (t *Test) CollectHooks(slot string) []Hook {
 	return hooks
 }
 
-// Suite represents a collection of tests from a single spark.yaml file.
+// Suite represents a collection of tests from a single chiperka.yaml file.
 type Suite struct {
 	Name  string `yaml:"name" json:"name"`
 	Tests []Test `yaml:"tests" json:"tests"`

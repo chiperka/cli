@@ -14,16 +14,16 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"spark-cli/internal/cloud"
-	"spark-cli/internal/config"
-	"spark-cli/internal/events"
-	"spark-cli/internal/events/subscribers"
-	"spark-cli/internal/finder"
-	"spark-cli/internal/model"
-	"spark-cli/internal/output"
-	"spark-cli/internal/parser"
-	"spark-cli/internal/runner"
-	"spark-cli/internal/telemetry"
+	"chiperka-cli/internal/cloud"
+	"chiperka-cli/internal/config"
+	"chiperka-cli/internal/events"
+	"chiperka-cli/internal/events/subscribers"
+	"chiperka-cli/internal/finder"
+	"chiperka-cli/internal/model"
+	"chiperka-cli/internal/output"
+	"chiperka-cli/internal/parser"
+	"chiperka-cli/internal/runner"
+	"chiperka-cli/internal/telemetry"
 )
 
 var junitOutput string
@@ -46,12 +46,12 @@ var cloudProject string
 
 var runCmd = &cobra.Command{
 	Use:   "run [path]",
-	Short: "Run tests from spark.yaml files",
-	Long: `Run discovers and executes tests defined in *.spark files.
+	Short: "Run tests from chiperka.yaml files",
+	Long: `Run discovers and executes tests defined in *.chiperka files.
 
 The command walks through the specified directory (or current directory if not specified)
-and finds all files matching the *.spark pattern. You can also specify a single
-.spark file directly.
+and finds all files matching the *.chiperka pattern. You can also specify a single
+.chiperka file directly.
 
 Use --tags to run only tests with specific tags. Multiple tags can be specified
 (comma-separated or multiple flags). Tests matching ANY of the specified tags will run.
@@ -59,8 +59,8 @@ Use --tags to run only tests with specific tags. Multiple tags can be specified
 Use --filter to run only tests whose name matches the pattern. Supports glob patterns
 with * wildcard. Without wildcards, performs substring match.
 
-Use --configuration to specify a spark.yaml configuration file with shared service
-definitions. If not specified, spark.yaml/spark.yml is auto-discovered in the
+Use --configuration to specify a chiperka.yaml configuration file with shared service
+definitions. If not specified, chiperka.yaml/chiperka.yml is auto-discovered in the
 current working directory.
 
 Output modes:
@@ -68,22 +68,22 @@ Output modes:
   --debug      Show docker commands being executed (implies --verbose)
 
 Example:
-  spark run ./tests
-  spark run ./tests/auth.spark
-  spark run .
-  spark run
-  spark run ./tests --tags smoke
-  spark run ./tests --tags smoke,api
-  spark run ./tests --filter "login*"
-  spark run ./tests --filter "*authentication*"
-  spark run ./tests --tags smoke --filter "user*"
-  spark run ./tests --verbose
-  spark run ./tests --debug
-  spark run ./tests --configuration spark.yaml
-  spark run ./tests --env-file .env
-  spark run ./tests --env-file .env --env-file .env.local
-  spark run ./tests --cloud                    # uses cloud.url from spark.yaml
-  SPARK_CLOUD_URL=http://ci.example.com spark run ./tests --cloud  # env override for CI/CD`,
+  chiperka run ./tests
+  chiperka run ./tests/auth.chiperka
+  chiperka run .
+  chiperka run
+  chiperka run ./tests --tags smoke
+  chiperka run ./tests --tags smoke,api
+  chiperka run ./tests --filter "login*"
+  chiperka run ./tests --filter "*authentication*"
+  chiperka run ./tests --tags smoke --filter "user*"
+  chiperka run ./tests --verbose
+  chiperka run ./tests --debug
+  chiperka run ./tests --configuration chiperka.yaml
+  chiperka run ./tests --env-file .env
+  chiperka run ./tests --env-file .env --env-file .env.local
+  chiperka run ./tests --cloud                    # uses cloud.url from chiperka.yaml
+  CHIPERKA_CLOUD_URL=http://ci.example.com chiperka run ./tests --cloud  # env override for CI/CD`,
 	Args:          cobra.MaximumNArgs(1),
 	SilenceUsage:  true, // Don't print usage on error - it's confusing in CI logs
 	SilenceErrors: true,
@@ -102,13 +102,13 @@ func init() {
 	runCmd.Flags().BoolVar(&debugOutput, "debug", false, "Show docker commands (implies --verbose)")
 	runCmd.Flags().IntVar(&testTimeout, "timeout", 300, "Maximum time in seconds for each test execution")
 	runCmd.Flags().IntVar(&workerCount, "workers", 0, "Number of parallel test workers (0 = auto-detect from CPU count)")
-	runCmd.Flags().BoolVar(&cloudMode, "cloud", false, "Run tests on remote cloud server (configured via spark.yaml cloud.url or SPARK_CLOUD_URL env)")
+	runCmd.Flags().BoolVar(&cloudMode, "cloud", false, "Run tests on remote cloud server (configured via chiperka.yaml cloud.url or CHIPERKA_CLOUD_URL env)")
 	runCmd.Flags().Float64Var(&cpuThreshold, "cpu-threshold", 0, "CPU load threshold (0.0-1.0) - pause test execution when exceeded (0 = disabled)")
 	runCmd.Flags().BoolVar(&teamcityOutput, "teamcity", false, "Output TeamCity service messages for IDE integration")
 	runCmd.Flags().BoolVar(&jsonOutput, "json", false, "Output NDJSON for machine consumption")
-	runCmd.Flags().StringVar(&pathMapping, "path-mapping", "", "Path prefix mapping for artifact paths (container=host, e.g. /srv/spark=/Users/me/project)")
-	runCmd.Flags().StringVar(&configFile, "configuration", "", "Path to spark.yaml configuration file (auto-discovered if not set)")
-	runCmd.Flags().StringVar(&cloudProject, "project", "", "Project slug for cloud runs (env: SPARK_PROJECT, config: cloud.project)")
+	runCmd.Flags().StringVar(&pathMapping, "path-mapping", "", "Path prefix mapping for artifact paths (container=host, e.g. /srv/chiperka=/Users/me/project)")
+	runCmd.Flags().StringVar(&configFile, "configuration", "", "Path to chiperka.yaml configuration file (auto-discovered if not set)")
+	runCmd.Flags().StringVar(&cloudProject, "project", "", "Project slug for cloud runs (env: CHIPERKA_PROJECT, config: cloud.project)")
 }
 
 // runTests is the main entry point for the run command.
@@ -127,7 +127,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 
 	// Find test files - either single file or directory search
 	var files []string
-	if !info.IsDir() && strings.HasSuffix(searchPath, ".spark") {
+	if !info.IsDir() && strings.HasSuffix(searchPath, ".chiperka") {
 		// Single file specified
 		files = []string{searchPath}
 	} else {
@@ -140,7 +140,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(files) == 0 {
-		fmt.Printf("No *.spark files found in %s\n", searchPath)
+		fmt.Printf("No *.chiperka files found in %s\n", searchPath)
 		return nil
 	}
 
@@ -260,16 +260,16 @@ func runTests(cmd *cobra.Command, args []string) error {
 
 	// Cloud mode: upload tests to remote API and stream results
 	if cloudMode {
-		// Resolve cloud URL: spark.yaml > SPARK_CLOUD_URL env
+		// Resolve cloud URL: chiperka.yaml > CHIPERKA_CLOUD_URL env
 		cloudURL := ""
 		if cfg != nil && cfg.Cloud.URL != "" {
 			cloudURL = cfg.Cloud.URL
 		}
-		if envURL := os.Getenv("SPARK_CLOUD_URL"); envURL != "" {
+		if envURL := os.Getenv("CHIPERKA_CLOUD_URL"); envURL != "" {
 			cloudURL = envURL // env overrides config
 		}
 		if cloudURL == "" {
-			fmt.Fprintln(os.Stderr, "Error: cloud URL not configured. Set 'cloud.url' in spark.yaml or SPARK_CLOUD_URL environment variable.")
+			fmt.Fprintln(os.Stderr, "Error: cloud URL not configured. Set 'cloud.url' in chiperka.yaml or CHIPERKA_CLOUD_URL environment variable.")
 			os.Exit(1)
 		}
 		// Only download artifacts if --artifacts was explicitly set
@@ -277,10 +277,10 @@ func runTests(cmd *cobra.Command, args []string) error {
 		if cmd.Flags().Changed("artifacts") {
 			cloudArtifactsDir = artifactsDir
 		}
-		// Resolve project slug: --project flag > SPARK_PROJECT env > spark.yaml cloud.project
+		// Resolve project slug: --project flag > CHIPERKA_PROJECT env > chiperka.yaml cloud.project
 		projectSlug := cloudProject
 		if projectSlug == "" {
-			projectSlug = os.Getenv("SPARK_PROJECT")
+			projectSlug = os.Getenv("CHIPERKA_PROJECT")
 		}
 		if projectSlug == "" {
 			projectSlug = cfg.Cloud.Project
@@ -366,7 +366,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}, result.TotalTests(), result.TotalPassed(), result.TotalFailed(), result.TotalSkipped(), len(tests.Suites))
 
 	// Get weblink prefix for CLI output (e.g., "http://localhost:8080/reports")
-	weblink := os.Getenv("SPARK_WEBLINK")
+	weblink := os.Getenv("CHIPERKA_WEBLINK")
 	if weblink != "" {
 		weblink = strings.TrimSuffix(weblink, "/")
 	}
@@ -448,10 +448,10 @@ func loadConfig() (*config.Config, error) {
 }
 
 // resolveCloudToken resolves the auth token for cloud mode.
-// Priority: SPARK_TOKEN env var > ~/.spark/auth.json > empty string.
+// Priority: CHIPERKA_TOKEN env var > ~/.chiperka/auth.json > empty string.
 func resolveCloudToken(apiURL string) string {
 	// 1. Environment variable takes priority
-	if token := os.Getenv("SPARK_TOKEN"); token != "" {
+	if token := os.Getenv("CHIPERKA_TOKEN"); token != "" {
 		return token
 	}
 
@@ -462,14 +462,14 @@ func resolveCloudToken(apiURL string) string {
 	}
 
 	var authFile struct {
-		SparkToken map[string]string `json:"spark-token"`
+		ChiperkaToken map[string]string `json:"chiperka-token"`
 	}
 	if err := json.Unmarshal(data, &authFile); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: auth.json is not valid JSON, ignoring\n")
 		return ""
 	}
 
-	if authFile.SparkToken == nil {
+	if authFile.ChiperkaToken == nil {
 		return ""
 	}
 
@@ -479,7 +479,7 @@ func resolveCloudToken(apiURL string) string {
 		return ""
 	}
 
-	if token, ok := authFile.SparkToken[parsed.Host]; ok {
+	if token, ok := authFile.ChiperkaToken[parsed.Host]; ok {
 		return token
 	}
 

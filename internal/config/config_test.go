@@ -10,7 +10,7 @@ import (
 
 func TestConfig_Load_Valid(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "spark.yaml")
+	path := filepath.Join(dir, "chiperka.yaml")
 	content := `services:
   db:
     image: postgres:15
@@ -43,7 +43,7 @@ func TestConfig_Load_Valid(t *testing.T) {
 }
 
 func TestConfig_Load_NonExistent(t *testing.T) {
-	_, err := Load("/nonexistent/spark.yaml")
+	_, err := Load("/nonexistent/chiperka.yaml")
 	if err == nil {
 		t.Errorf("expected error for non-existent file")
 	}
@@ -51,7 +51,7 @@ func TestConfig_Load_NonExistent(t *testing.T) {
 
 func TestConfig_Load_InvalidYAML(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "spark.yaml")
+	path := filepath.Join(dir, "chiperka.yaml")
 	if err := os.WriteFile(path, []byte("invalid: [yaml"), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -62,14 +62,14 @@ func TestConfig_Load_InvalidYAML(t *testing.T) {
 }
 
 func TestConfig_Load_WithEnvVars(t *testing.T) {
-	os.Setenv("SPARK_DB_IMAGE", "postgres:16")
-	t.Cleanup(func() { os.Unsetenv("SPARK_DB_IMAGE") })
+	os.Setenv("CHIPERKA_DB_IMAGE", "postgres:16")
+	t.Cleanup(func() { os.Unsetenv("CHIPERKA_DB_IMAGE") })
 
 	dir := t.TempDir()
-	path := filepath.Join(dir, "spark.yaml")
+	path := filepath.Join(dir, "chiperka.yaml")
 	content := `services:
   db:
-    image: $SPARK_DB_IMAGE
+    image: $CHIPERKA_DB_IMAGE
 `
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
@@ -86,7 +86,7 @@ func TestConfig_Load_WithEnvVars(t *testing.T) {
 
 func TestConfig_Load_Empty(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "spark.yaml")
+	path := filepath.Join(dir, "chiperka.yaml")
 	if err := os.WriteFile(path, []byte(""), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestConfig_Load_Empty(t *testing.T) {
 
 // --- Discover ---
 
-func TestConfig_Discover_SparkYaml(t *testing.T) {
+func TestConfig_Discover_ChiperkaYaml(t *testing.T) {
 	dir := t.TempDir()
 	origDir, err := os.Getwd()
 	if err != nil {
@@ -113,20 +113,20 @@ func TestConfig_Discover_SparkYaml(t *testing.T) {
 	t.Cleanup(func() { os.Chdir(origDir) })
 
 	content := "services:\n  db:\n    image: postgres:15\n"
-	if err := os.WriteFile(filepath.Join(dir, "spark.yaml"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "chiperka.yaml"), []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
 	cfg, found := Discover()
 	if !found {
-		t.Fatalf("expected to discover spark.yaml")
+		t.Fatalf("expected to discover chiperka.yaml")
 	}
 	if len(cfg.Services) != 1 {
 		t.Errorf("expected 1 service, got %d", len(cfg.Services))
 	}
 }
 
-func TestConfig_Discover_SparkYml(t *testing.T) {
+func TestConfig_Discover_ChiperkaYml(t *testing.T) {
 	dir := t.TempDir()
 	origDir, err := os.Getwd()
 	if err != nil {
@@ -138,13 +138,13 @@ func TestConfig_Discover_SparkYml(t *testing.T) {
 	t.Cleanup(func() { os.Chdir(origDir) })
 
 	content := "services:\n  redis:\n    image: redis:7\n"
-	if err := os.WriteFile(filepath.Join(dir, "spark.yml"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "chiperka.yml"), []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
 	cfg, found := Discover()
 	if !found {
-		t.Fatalf("expected to discover spark.yml")
+		t.Fatalf("expected to discover chiperka.yml")
 	}
 	if len(cfg.Services) != 1 {
 		t.Errorf("expected 1 service, got %d", len(cfg.Services))
@@ -179,20 +179,20 @@ func TestConfig_Discover_YamlPrefersOverYml(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chdir(origDir) })
 
-	if err := os.WriteFile(filepath.Join(dir, "spark.yaml"), []byte("services:\n  db:\n    image: postgres:15\n"), 0644); err != nil {
-		t.Fatalf("failed to write spark.yaml: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "chiperka.yaml"), []byte("services:\n  db:\n    image: postgres:15\n"), 0644); err != nil {
+		t.Fatalf("failed to write chiperka.yaml: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "spark.yml"), []byte("services:\n  redis:\n    image: redis:7\n"), 0644); err != nil {
-		t.Fatalf("failed to write spark.yml: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "chiperka.yml"), []byte("services:\n  redis:\n    image: redis:7\n"), 0644); err != nil {
+		t.Fatalf("failed to write chiperka.yml: %v", err)
 	}
 
 	cfg, found := Discover()
 	if !found {
 		t.Fatalf("expected to discover config")
 	}
-	// spark.yaml should be preferred (checked first)
+	// chiperka.yaml should be preferred (checked first)
 	if _, ok := cfg.Services["db"]; !ok {
-		t.Errorf("expected spark.yaml to be preferred over spark.yml")
+		t.Errorf("expected chiperka.yaml to be preferred over chiperka.yml")
 	}
 }
 
@@ -254,7 +254,7 @@ func TestConfig_ServiceTemplates_NoServices(t *testing.T) {
 
 func TestConfig_ServiceTemplates_WithHealthcheck(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "spark.yaml")
+	path := filepath.Join(dir, "chiperka.yaml")
 	content := `services:
   api:
     image: myapp:latest

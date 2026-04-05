@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"spark-cli/internal/executor"
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/executor"
+	"chiperka-cli/internal/model"
 )
 
 // Evaluator checks assertions against test responses.

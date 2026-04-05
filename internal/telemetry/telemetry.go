@@ -74,7 +74,7 @@ func ShowNoticeIfNeeded(teamcityMode bool) {
 
 	// Show notice
 	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Notice: Spark collects anonymous usage stats — thank you for helping us improve this awesome tool! If you don't want to be part of it, you can disable it using `spark telemetry disable`.")
+	fmt.Fprintln(os.Stderr, "Notice: Chiperka collects anonymous usage stats — thank you for helping us improve this awesome tool! If you don't want to be part of it, you can disable it using `chiperka telemetry disable`.")
 	fmt.Fprintln(os.Stderr, "")
 
 	// Save config so notice isn't shown again
@@ -155,7 +155,7 @@ func ClassifyError(err error) string {
 		return "parse_error"
 	case strings.Contains(msg, "timeout") || strings.Contains(msg, "deadline"):
 		return "timeout"
-	case strings.Contains(msg, "no *.spark files") || strings.Contains(msg, "no test"):
+	case strings.Contains(msg, "no *.chiperka files") || strings.Contains(msg, "no test"):
 		return "no_test_files"
 	case strings.Contains(msg, "connection refused") || strings.Contains(msg, "no such host"):
 		return "network"

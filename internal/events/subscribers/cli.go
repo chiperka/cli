@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"spark-cli/internal/events"
+	"chiperka-cli/internal/events"
 )
 
 // CLIReporter writes user-friendly progress output.
@@ -68,15 +68,15 @@ func (c *CLIReporter) onRunStarted(e *events.Event) {
 	version, _ := e.Data.Details["version"].(string)
 	if c.color {
 		if version != "" && version != "dev" {
-			fmt.Fprintf(c.out, "%sSpark Test Runner%s %sv%s%s\n", colorCyan, colorReset, colorGray, version, colorReset)
+			fmt.Fprintf(c.out, "%sChiperka Test Runner%s %sv%s%s\n", colorCyan, colorReset, colorGray, version, colorReset)
 		} else {
-			fmt.Fprintf(c.out, "%sSpark Test Runner%s\n", colorCyan, colorReset)
+			fmt.Fprintf(c.out, "%sChiperka Test Runner%s\n", colorCyan, colorReset)
 		}
 	} else {
 		if version != "" && version != "dev" {
-			fmt.Fprintf(c.out, "Spark Test Runner v%s\n", version)
+			fmt.Fprintf(c.out, "Chiperka Test Runner v%s\n", version)
 		} else {
-			fmt.Fprintln(c.out, "Spark Test Runner")
+			fmt.Fprintln(c.out, "Chiperka Test Runner")
 		}
 	}
 	fmt.Fprintf(c.out, "  %d tests in %d suites", c.totalTests, suites)

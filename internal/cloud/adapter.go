@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"spark-cli/internal/events"
+	"chiperka-cli/internal/events"
 )
 
 // SSEAdapter bridges SSE events into the internal event bus so that all

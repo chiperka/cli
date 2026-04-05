@@ -50,7 +50,7 @@ func TestEmitter_SetFilePath(t *testing.T) {
 	bus := NewBus()
 	emitter := NewEmitter(bus)
 	scoped := emitter.ForTest("suite1", "test1")
-	scoped.SetFilePath("/path/to/test.spark")
+	scoped.SetFilePath("/path/to/test.chiperka")
 
 	var received *Event
 	bus.OnAll(func(e *Event) {
@@ -59,7 +59,7 @@ func TestEmitter_SetFilePath(t *testing.T) {
 
 	scoped.Emit(NewEvent(TestStarted))
 
-	if received.FilePath != "/path/to/test.spark" {
+	if received.FilePath != "/path/to/test.chiperka" {
 		t.Errorf("expected FilePath, got %q", received.FilePath)
 	}
 }

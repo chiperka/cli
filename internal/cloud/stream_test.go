@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"spark-cli/internal/events"
+	"chiperka-cli/internal/events"
 )
 
 // eventRecorder captures events emitted on a bus.

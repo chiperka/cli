@@ -15,20 +15,20 @@ import (
 // registry, or an empty string if no credentials are found.
 //
 // Priority:
-//  1. SPARK_REGISTRY_USER + SPARK_REGISTRY_PASSWORD + SPARK_REGISTRY_HOST env vars
+//  1. CHIPERKA_REGISTRY_USER + CHIPERKA_REGISTRY_PASSWORD + CHIPERKA_REGISTRY_HOST env vars
 //  2. ~/.docker/config.json (standard docker login credentials)
 //
 // Env var credentials are only sent when the image's registry matches
-// SPARK_REGISTRY_HOST, preventing credential leaks to untrusted registries.
+// CHIPERKA_REGISTRY_HOST, preventing credential leaks to untrusted registries.
 //
 // Returns empty string on any error — public images pull without auth as before.
 func getRegistryAuth(image string) string {
 	host := registryHost(image)
 
-	// 1. Check env vars — requires SPARK_REGISTRY_HOST to scope credentials
-	if envHost := os.Getenv("SPARK_REGISTRY_HOST"); envHost != "" && envHost == host {
-		if user := os.Getenv("SPARK_REGISTRY_USER"); user != "" {
-			if pass := os.Getenv("SPARK_REGISTRY_PASSWORD"); pass != "" {
+	// 1. Check env vars — requires CHIPERKA_REGISTRY_HOST to scope credentials
+	if envHost := os.Getenv("CHIPERKA_REGISTRY_HOST"); envHost != "" && envHost == host {
+		if user := os.Getenv("CHIPERKA_REGISTRY_USER"); user != "" {
+			if pass := os.Getenv("CHIPERKA_REGISTRY_PASSWORD"); pass != "" {
 				return encodeAuth(registry.AuthConfig{
 					Username:      user,
 					Password:      pass,

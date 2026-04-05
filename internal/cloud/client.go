@@ -1,4 +1,4 @@
-// Package cloud provides an HTTP client for the Spark Cloud API.
+// Package cloud provides an HTTP client for the Chiperka Cloud API.
 package cloud
 
 import (
@@ -12,10 +12,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/model"
 )
 
-// Client is the Spark Cloud API client.
+// Client is the Chiperka Cloud API client.
 type Client struct {
 	baseURL    string
 	token      string

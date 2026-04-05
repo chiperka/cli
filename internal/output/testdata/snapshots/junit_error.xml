@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="Spark" tests="1" failures="1" errors="1" skipped="0" time="5">
-  <testsuite name="timeout-suite" tests="1" failures="0" errors="1" skipped="0" time="5" timestamp="__TIMESTAMP__" file="tests/timeout.spark">
-    <testcase name="timeout-test" classname="timeout-suite" time="5" file="tests/timeout.spark">
+<testsuites name="Chiperka" tests="1" failures="1" errors="1" skipped="0" time="5">
+  <testsuite name="timeout-suite" tests="1" failures="0" errors="1" skipped="0" time="5" timestamp="__TIMESTAMP__" file="tests/timeout.chiperka">
+    <testcase name="timeout-test" classname="timeout-suite" time="5" file="tests/timeout.chiperka">
       <error message="execution timeout after 5s" type="Error">execution timeout after 5s</error>
       <system-err>execution timeout after 5s</system-err>
     </testcase>

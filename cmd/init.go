@@ -10,20 +10,20 @@ import (
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize a new Spark project",
-	Long: `Init scaffolds a starter Spark project in the current directory.
+	Short: "Initialize a new Chiperka project",
+	Long: `Init scaffolds a starter Chiperka project in the current directory.
 
 It creates:
-  - spark.yaml       Configuration with an example service template
-  - tests/health.spark  Health check test (1 test case)
-  - tests/api.spark     API tests (2 test cases)
+  - chiperka.yaml       Configuration with an example service template
+  - tests/health.chiperka  Health check test (1 test case)
+  - tests/api.chiperka     API tests (2 test cases)
 
-If spark.yaml already exists, init exits without modifying anything.
+If chiperka.yaml already exists, init exits without modifying anything.
 
 Example:
   mkdir my-project && cd my-project
-  spark init
-  spark run tests`,
+  chiperka init
+  chiperka run tests`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE:         runInit,
@@ -33,7 +33,7 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 }
 
-const sparkYAMLContent = `services:
+const chiperkaYAMLContent = `services:
   api:
     image: nginx:alpine
     healthcheck:
@@ -41,7 +41,7 @@ const sparkYAMLContent = `services:
       retries: 30
 `
 
-const healthSparkContent = `name: Health checks
+const healthChiperkaContent = `name: Health checks
 
 tests:
   - name: API is reachable
@@ -58,7 +58,7 @@ tests:
           statusCode: 200
 `
 
-const apiSparkContent = `name: API tests
+const apiChiperkaContent = `name: API tests
 
 tests:
   - name: Homepage returns content
@@ -89,9 +89,9 @@ tests:
 `
 
 func runInit(cmd *cobra.Command, args []string) error {
-	// Check if spark.yaml already exists
-	if _, err := os.Stat("spark.yaml"); err == nil {
-		fmt.Println("spark.yaml already exists, skipping initialization")
+	// Check if chiperka.yaml already exists
+	if _, err := os.Stat("chiperka.yaml"); err == nil {
+		fmt.Println("chiperka.yaml already exists, skipping initialization")
 		return nil
 	}
 
@@ -100,26 +100,26 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create tests directory: %w", err)
 	}
 
-	// Write spark.yaml
-	if err := os.WriteFile("spark.yaml", []byte(sparkYAMLContent), 0644); err != nil {
-		return fmt.Errorf("failed to write spark.yaml: %w", err)
+	// Write chiperka.yaml
+	if err := os.WriteFile("chiperka.yaml", []byte(chiperkaYAMLContent), 0644); err != nil {
+		return fmt.Errorf("failed to write chiperka.yaml: %w", err)
 	}
 
-	// Write tests/health.spark
-	if err := os.WriteFile(filepath.Join("tests", "health.spark"), []byte(healthSparkContent), 0644); err != nil {
-		return fmt.Errorf("failed to write tests/health.spark: %w", err)
+	// Write tests/health.chiperka
+	if err := os.WriteFile(filepath.Join("tests", "health.chiperka"), []byte(healthChiperkaContent), 0644); err != nil {
+		return fmt.Errorf("failed to write tests/health.chiperka: %w", err)
 	}
 
-	// Write tests/api.spark
-	if err := os.WriteFile(filepath.Join("tests", "api.spark"), []byte(apiSparkContent), 0644); err != nil {
-		return fmt.Errorf("failed to write tests/api.spark: %w", err)
+	// Write tests/api.chiperka
+	if err := os.WriteFile(filepath.Join("tests", "api.chiperka"), []byte(apiChiperkaContent), 0644); err != nil {
+		return fmt.Errorf("failed to write tests/api.chiperka: %w", err)
 	}
 
-	fmt.Println("Created spark.yaml")
-	fmt.Println("Created tests/health.spark")
-	fmt.Println("Created tests/api.spark")
+	fmt.Println("Created chiperka.yaml")
+	fmt.Println("Created tests/health.chiperka")
+	fmt.Println("Created tests/api.chiperka")
 	fmt.Println()
-	fmt.Println("Run your tests with: spark run tests")
+	fmt.Println("Run your tests with: chiperka run tests")
 
 	return nil
 }

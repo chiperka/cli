@@ -9,32 +9,32 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"spark-cli/internal/config"
-	"spark-cli/internal/events"
-	"spark-cli/internal/events/subscribers"
-	"spark-cli/internal/finder"
-	"spark-cli/internal/model"
-	"spark-cli/internal/parser"
-	"spark-cli/internal/runner"
+	"chiperka-cli/internal/config"
+	"chiperka-cli/internal/events"
+	"chiperka-cli/internal/events/subscribers"
+	"chiperka-cli/internal/finder"
+	"chiperka-cli/internal/model"
+	"chiperka-cli/internal/parser"
+	"chiperka-cli/internal/runner"
 )
 
 // --- Tool definitions ---
 
 func contextTool() mcp.Tool {
-	return mcp.NewTool("spark_context",
-		mcp.WithDescription("Get AI-readable Spark test runner reference. Call this first to understand the test file format, commands, and workflow."),
+	return mcp.NewTool("chiperka_context",
+		mcp.WithDescription("Get AI-readable Chiperka test runner reference. Call this first to understand the test file format, commands, and workflow."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 	)
 }
 
 func listTool() mcp.Tool {
-	return mcp.NewTool("spark_list",
-		mcp.WithDescription("Discover Spark tests and available service templates. Returns suites, tests, tags, and reusable service templates (ref: values) from spark.yaml config."),
+	return mcp.NewTool("chiperka_list",
+		mcp.WithDescription("Discover Chiperka tests and available service templates. Returns suites, tests, tags, and reusable service templates (ref: values) from chiperka.yaml config."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithString("path",
-			mcp.Description("Directory or .spark file path"),
+			mcp.Description("Directory or .chiperka file path"),
 			mcp.Required(),
 		),
 		mcp.WithString("filter",
@@ -44,18 +44,18 @@ func listTool() mcp.Tool {
 			mcp.Description("Comma-separated tags to filter by (e.g. \"smoke,api\")"),
 		),
 		mcp.WithString("configuration",
-			mcp.Description("Path to spark.yaml configuration file (auto-discovered if not set)"),
+			mcp.Description("Path to chiperka.yaml configuration file (auto-discovered if not set)"),
 		),
 	)
 }
 
 func readTool() mcp.Tool {
-	return mcp.NewTool("spark_read",
-		mcp.WithDescription("Read .spark test files and return parsed structured JSON. Use this to see how existing tests are written — services, setup, execution, assertions — so you can match project conventions when writing new tests."),
+	return mcp.NewTool("chiperka_read",
+		mcp.WithDescription("Read .chiperka test files and return parsed structured JSON. Use this to see how existing tests are written — services, setup, execution, assertions — so you can match project conventions when writing new tests."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithString("path",
-			mcp.Description("Directory or .spark file path"),
+			mcp.Description("Directory or .chiperka file path"),
 			mcp.Required(),
 		),
 		mcp.WithString("filter",
@@ -68,37 +68,37 @@ func readTool() mcp.Tool {
 }
 
 func validateTool() mcp.Tool {
-	return mcp.NewTool("spark_validate",
-		mcp.WithDescription("Validate Spark test files for structural and semantic errors without executing them. Catches missing images, broken template references, missing execution blocks, etc."),
+	return mcp.NewTool("chiperka_validate",
+		mcp.WithDescription("Validate Chiperka test files for structural and semantic errors without executing them. Catches missing images, broken template references, missing execution blocks, etc."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithString("path",
-			mcp.Description("Directory or .spark file path"),
+			mcp.Description("Directory or .chiperka file path"),
 			mcp.Required(),
 		),
 		mcp.WithString("filter",
 			mcp.Description("Name pattern filter (supports * wildcard)"),
 		),
 		mcp.WithString("configuration",
-			mcp.Description("Path to spark.yaml configuration file"),
+			mcp.Description("Path to chiperka.yaml configuration file"),
 		),
 	)
 }
 
 func runTool() mcp.Tool {
-	return mcp.NewTool("spark_run",
-		mcp.WithDescription("Execute Spark tests and return full results including status, assertions, duration, errors, logs, and HTTP exchanges. Failed tests include response bodies and service logs for debugging."),
+	return mcp.NewTool("chiperka_run",
+		mcp.WithDescription("Execute Chiperka tests and return full results including status, assertions, duration, errors, logs, and HTTP exchanges. Failed tests include response bodies and service logs for debugging."),
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithString("path",
-			mcp.Description("Directory or .spark file path"),
+			mcp.Description("Directory or .chiperka file path"),
 			mcp.Required(),
 		),
 		mcp.WithString("filter",
 			mcp.Description("Name pattern filter (supports * wildcard)"),
 		),
 		mcp.WithString("configuration",
-			mcp.Description("Path to spark.yaml configuration file"),
+			mcp.Description("Path to chiperka.yaml configuration file"),
 		),
 		mcp.WithNumber("timeout",
 			mcp.Description("Maximum seconds per test (default 300)"),
@@ -110,16 +110,16 @@ func runTool() mcp.Tool {
 }
 
 func executeTool() mcp.Tool {
-	return mcp.NewTool("spark_execute",
-		mcp.WithDescription("Execute an inline test definition without a .spark file. Pass YAML directly (same format as a .spark file). Returns full HTTP exchange — status, headers, response body, service logs — so you can see exactly what the endpoint returns before writing assertions. Use this to probe endpoints and understand their behavior."),
+	return mcp.NewTool("chiperka_execute",
+		mcp.WithDescription("Execute an inline test definition without a .chiperka file. Pass YAML directly (same format as a .chiperka file). Returns full HTTP exchange — status, headers, response body, service logs — so you can see exactly what the endpoint returns before writing assertions. Use this to probe endpoints and understand their behavior."),
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithString("yaml",
-			mcp.Description("Inline YAML test definition (same format as .spark file content)"),
+			mcp.Description("Inline YAML test definition (same format as .chiperka file content)"),
 			mcp.Required(),
 		),
 		mcp.WithString("configuration",
-			mcp.Description("Path to spark.yaml configuration file"),
+			mcp.Description("Path to chiperka.yaml configuration file"),
 		),
 		mcp.WithNumber("timeout",
 			mcp.Description("Maximum seconds per test (default 300)"),
@@ -944,7 +944,7 @@ func discoverTests(path string, tags []string, filter string) (*model.TestCollec
 	}
 
 	var files []string
-	if !info.IsDir() && strings.HasSuffix(path, ".spark") {
+	if !info.IsDir() && strings.HasSuffix(path, ".chiperka") {
 		files = []string{path}
 	} else {
 		f := finder.New(path)

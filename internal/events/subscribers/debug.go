@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"spark-cli/internal/events"
+	"chiperka-cli/internal/events"
 )
 
 // DebugLogger writes detailed docker command information.

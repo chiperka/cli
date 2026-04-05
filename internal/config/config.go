@@ -1,4 +1,4 @@
-// Package config handles loading of spark.yaml configuration files.
+// Package config handles loading of chiperka.yaml configuration files.
 package config
 
 import (
@@ -7,13 +7,13 @@ import (
 	"regexp"
 
 	"gopkg.in/yaml.v3"
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/model"
 )
 
-// envVarPattern matches environment variables with $SPARK_ prefix.
-var envVarPattern = regexp.MustCompile(`\$SPARK_[A-Za-z0-9_]+`)
+// envVarPattern matches environment variables with $CHIPERKA_ prefix.
+var envVarPattern = regexp.MustCompile(`\$CHIPERKA_[A-Za-z0-9_]+`)
 
-// expandEnvVars replaces all $SPARK_* patterns with their environment variable values.
+// expandEnvVars replaces all $CHIPERKA_* patterns with their environment variable values.
 func expandEnvVars(data []byte) []byte {
 	return envVarPattern.ReplaceAllFunc(data, func(match []byte) []byte {
 		varName := string(match[1:]) // Remove the $ prefix
@@ -33,13 +33,13 @@ type ServiceConfig struct {
 	Hooks        []model.Hook            `yaml:"hooks,omitempty"`
 }
 
-// CloudConfig defines cloud-related configuration in spark.yaml.
+// CloudConfig defines cloud-related configuration in chiperka.yaml.
 type CloudConfig struct {
 	URL     string `yaml:"url,omitempty"`
 	Project string `yaml:"project,omitempty"` // project slug
 }
 
-// Config represents the contents of a spark.yaml configuration file.
+// Config represents the contents of a chiperka.yaml configuration file.
 type Config struct {
 	Services           map[string]ServiceConfig `yaml:"services"`
 	ExecutionVariables map[string]string        `yaml:"executionVariables"`
@@ -64,10 +64,10 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// Discover looks for spark.yaml or spark.yml in the current working directory.
+// Discover looks for chiperka.yaml or chiperka.yml in the current working directory.
 // Returns the config and true if found, or an empty config and false if not found.
 func Discover() (*Config, bool) {
-	for _, name := range []string{"spark.yaml", "spark.yml"} {
+	for _, name := range []string{"chiperka.yaml", "chiperka.yml"} {
 		if _, err := os.Stat(name); err == nil {
 			cfg, err := Load(name)
 			if err != nil {

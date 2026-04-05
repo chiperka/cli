@@ -56,7 +56,7 @@ func createPoolNetwork() (string, error) {
 	if _, err := rand.Read(randomBytes); err != nil {
 		return "", err
 	}
-	networkName := fmt.Sprintf("spark-pool-%s", hex.EncodeToString(randomBytes))
+	networkName := fmt.Sprintf("chiperka-pool-%s", hex.EncodeToString(randomBytes))
 
 	_, err := dockerClient.NetworkCreate(context.Background(), networkName, network.CreateOptions{})
 	if err != nil {

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"spark-cli/internal/events"
+	"chiperka-cli/internal/events"
 )
 
 // SSEEvent represents a parsed Server-Sent Event.

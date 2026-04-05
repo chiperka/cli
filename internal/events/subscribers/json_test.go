@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"spark-cli/internal/events"
+	"chiperka-cli/internal/events"
 )
 
 // newJSONTest creates a JSONReporter with a buffer for testing.
@@ -82,7 +82,7 @@ func TestJSONTestCompleted(t *testing.T) {
 	bus, _, buf := newJSONTest(t)
 
 	bus.Emit(events.NewEvent(events.RunStarted).WithDetail("tests", 1))
-	bus.Emit(testEvent(events.TestStarted, "auth", "login", "/tests/auth.spark"))
+	bus.Emit(testEvent(events.TestStarted, "auth", "login", "/tests/auth.chiperka"))
 
 	// Assertion pass via log event
 	passLog := events.NewTestEvent(events.LogPass, "auth", "login")
@@ -90,7 +90,7 @@ func TestJSONTestCompleted(t *testing.T) {
 	passLog.Data.Details["action"] = "assertion_pass"
 	bus.Emit(passLog)
 
-	bus.Emit(testEvent(events.TestCompleted, "auth", "login", "/tests/auth.spark").
+	bus.Emit(testEvent(events.TestCompleted, "auth", "login", "/tests/auth.chiperka").
 		WithDuration(843 * time.Millisecond))
 
 	lines := getLines(buf.String())
@@ -135,7 +135,7 @@ func TestJSONTestFailed_SingleAssertion(t *testing.T) {
 	bus, _, buf := newJSONTest(t)
 
 	bus.Emit(events.NewEvent(events.RunStarted).WithDetail("tests", 1))
-	bus.Emit(testEvent(events.TestStarted, "api", "status-check", "/tests/api.spark"))
+	bus.Emit(testEvent(events.TestStarted, "api", "status-check", "/tests/api.chiperka"))
 
 	// Assertion fail via log event
 	failLog := events.NewTestEvent(events.LogFail, "api", "status-check")
@@ -145,7 +145,7 @@ func TestJSONTestFailed_SingleAssertion(t *testing.T) {
 	failLog.Data.Details["actual"] = "404"
 	bus.Emit(failLog)
 
-	bus.Emit(testEvent(events.TestFailed, "api", "status-check", "/tests/api.spark").
+	bus.Emit(testEvent(events.TestFailed, "api", "status-check", "/tests/api.chiperka").
 		WithDuration(500 * time.Millisecond))
 
 	lines := getLines(buf.String())
@@ -334,7 +334,7 @@ func TestJSONTestSkipped(t *testing.T) {
 
 	bus.Emit(events.NewEvent(events.RunStarted).WithDetail("tests", 1))
 
-	e := testEvent(events.TestSkipped, "api", "admin-test", "/tests/api.spark")
+	e := testEvent(events.TestSkipped, "api", "admin-test", "/tests/api.chiperka")
 	e.Data.Message = "requires admin"
 	bus.Emit(e)
 
@@ -477,27 +477,27 @@ func TestJSONFullRun_MixedResults(t *testing.T) {
 		WithDetail("suites", 1))
 
 	// Test 1: passes
-	bus.Emit(testEvent(events.TestStarted, "api", "get-health", "/api.spark"))
+	bus.Emit(testEvent(events.TestStarted, "api", "get-health", "/api.chiperka"))
 	passLog := events.NewTestEvent(events.LogPass, "api", "get-health")
 	passLog.Data.Message = "statusCode == 200"
 	passLog.Data.Details["action"] = "assertion_pass"
 	bus.Emit(passLog)
-	bus.Emit(testEvent(events.TestCompleted, "api", "get-health", "/api.spark").
+	bus.Emit(testEvent(events.TestCompleted, "api", "get-health", "/api.chiperka").
 		WithDuration(100 * time.Millisecond))
 
 	// Test 2: fails
-	bus.Emit(testEvent(events.TestStarted, "api", "post-login", "/api.spark"))
+	bus.Emit(testEvent(events.TestStarted, "api", "post-login", "/api.chiperka"))
 	failLog := events.NewTestEvent(events.LogFail, "api", "post-login")
 	failLog.Data.Message = "statusCode == 200"
 	failLog.Data.Details["action"] = "assertion_fail"
 	failLog.Data.Details["expected"] = "200"
 	failLog.Data.Details["actual"] = "401"
 	bus.Emit(failLog)
-	bus.Emit(testEvent(events.TestFailed, "api", "post-login", "/api.spark").
+	bus.Emit(testEvent(events.TestFailed, "api", "post-login", "/api.chiperka").
 		WithDuration(200 * time.Millisecond))
 
 	// Test 3: skipped
-	skipEvent := testEvent(events.TestSkipped, "api", "delete-user", "/api.spark")
+	skipEvent := testEvent(events.TestSkipped, "api", "delete-user", "/api.chiperka")
 	skipEvent.Data.Message = "requires admin"
 	bus.Emit(skipEvent)
 
@@ -534,11 +534,11 @@ func TestJSONOutput_ValidNDJSON(t *testing.T) {
 
 	// Emit a variety of events
 	bus.Emit(events.NewEvent(events.RunStarted).WithDetail("tests", 2))
-	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/test.spark"))
-	bus.Emit(testEvent(events.TestCompleted, "suite", "test1", "/test.spark").
+	bus.Emit(testEvent(events.TestStarted, "suite", "test1", "/test.chiperka"))
+	bus.Emit(testEvent(events.TestCompleted, "suite", "test1", "/test.chiperka").
 		WithDuration(100 * time.Millisecond))
-	bus.Emit(testEvent(events.TestStarted, "suite", "test2", "/test.spark"))
-	bus.Emit(testEvent(events.TestFailed, "suite", "test2", "/test.spark").
+	bus.Emit(testEvent(events.TestStarted, "suite", "test2", "/test.chiperka"))
+	bus.Emit(testEvent(events.TestFailed, "suite", "test2", "/test.chiperka").
 		WithDuration(200 * time.Millisecond).
 		WithMessage("failed"))
 	bus.Emit(events.NewEvent(events.RunCompleted).WithDuration(300 * time.Millisecond))

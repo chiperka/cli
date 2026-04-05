@@ -5,17 +5,17 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"spark-cli/internal/telemetry"
+	"chiperka-cli/internal/telemetry"
 )
 
 var telemetryCmd = &cobra.Command{
 	Use:   "telemetry",
 	Short: "Manage anonymous telemetry",
-	Long: `Manage anonymous usage telemetry for Spark.
+	Long: `Manage anonymous usage telemetry for Chiperka.
 
-Spark collects anonymous usage data to help improve the tool.
+Chiperka collects anonymous usage data to help improve the tool.
 No personal information is collected. You can disable telemetry
-at any time using 'spark telemetry disable'.
+at any time using 'chiperka telemetry disable'.
 
 Environment variables:
   DO_NOT_TRACK=1  Disable telemetry (standard)`,

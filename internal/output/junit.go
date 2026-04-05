@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/model"
 )
 
 // JUnitTestSuites represents the root element of JUnit XML.
@@ -125,7 +125,7 @@ func (w *JUnitWriter) WriteBytes(result *model.RunResult) ([]byte, error) {
 // buildSuites creates the JUnit XML structure from run results.
 func (w *JUnitWriter) buildSuites(result *model.RunResult, totalTime float64) JUnitTestSuites {
 	suites := JUnitTestSuites{
-		Name:     "Spark",
+		Name:     "Chiperka",
 		Tests:    result.TotalTests(),
 		Failures: result.TotalFailed(),
 		Errors:   result.TotalErrors(),

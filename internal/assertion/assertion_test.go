@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"spark-cli/internal/executor"
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/executor"
+	"chiperka-cli/internal/model"
 )
 
 func intPtr(v int) *int       { return &v }
@@ -434,7 +434,7 @@ func TestAssertion_Response_BodySnapshotMatch(t *testing.T) {
 	}
 	ctx := EvalContext{
 		HTTPResponse:  &executor.HTTPResponse{StatusCode: 200, Body: []byte("expected content")},
-		SuiteFilePath: filepath.Join(dir, "suite.spark"),
+		SuiteFilePath: filepath.Join(dir, "suite.chiperka"),
 	}
 	results, allPassed := e.EvaluateAll(assertions, ctx)
 	if !allPassed {
@@ -464,7 +464,7 @@ func TestAssertion_Response_BodySnapshotMismatch(t *testing.T) {
 	}
 	ctx := EvalContext{
 		HTTPResponse:  &executor.HTTPResponse{StatusCode: 200, Body: []byte("actual content")},
-		SuiteFilePath: filepath.Join(dir, "suite.spark"),
+		SuiteFilePath: filepath.Join(dir, "suite.chiperka"),
 	}
 	_, allPassed := e.EvaluateAll(assertions, ctx)
 	if allPassed {
@@ -483,7 +483,7 @@ func TestAssertion_Response_BodySnapshotRegenerate(t *testing.T) {
 	}
 	ctx := EvalContext{
 		HTTPResponse:  &executor.HTTPResponse{StatusCode: 200, Body: []byte("new content")},
-		SuiteFilePath: filepath.Join(dir, "suite.spark"),
+		SuiteFilePath: filepath.Join(dir, "suite.chiperka"),
 		Regenerate:    true,
 	}
 	results, allPassed := e.EvaluateAll(assertions, ctx)
@@ -521,7 +521,7 @@ func TestAssertion_CLI_StdoutSnapshot(t *testing.T) {
 	}
 	ctx := EvalContext{
 		CLIResponse:   &executor.CLIResponse{Stdout: []byte("migrated ok")},
-		SuiteFilePath: filepath.Join(dir, "suite.spark"),
+		SuiteFilePath: filepath.Join(dir, "suite.chiperka"),
 	}
 	results, allPassed := e.EvaluateAll(assertions, ctx)
 	if !allPassed {

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"spark-cli/internal/events"
+	"chiperka-cli/internal/events"
 )
 
 func newTestBus(t *testing.T) (*events.Bus, *EventCollector) {

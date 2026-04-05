@@ -1,4 +1,4 @@
-// Package parser handles reading and parsing of spark.yaml test files.
+// Package parser handles reading and parsing of chiperka.yaml test files.
 package parser
 
 import (
@@ -7,13 +7,13 @@ import (
 	"regexp"
 
 	"gopkg.in/yaml.v3"
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/model"
 )
 
-// envVarPattern matches environment variables with $SPARK_ prefix.
-var envVarPattern = regexp.MustCompile(`\$SPARK_[A-Za-z0-9_]+`)
+// envVarPattern matches environment variables with $CHIPERKA_ prefix.
+var envVarPattern = regexp.MustCompile(`\$CHIPERKA_[A-Za-z0-9_]+`)
 
-// expandEnvVars replaces all $SPARK_* patterns with their environment variable values.
+// expandEnvVars replaces all $CHIPERKA_* patterns with their environment variable values.
 func expandEnvVars(data []byte) []byte {
 	return envVarPattern.ReplaceAllFunc(data, func(match []byte) []byte {
 		varName := string(match[1:]) // Remove the $ prefix
@@ -21,7 +21,7 @@ func expandEnvVars(data []byte) []byte {
 	})
 }
 
-// Parser reads and parses spark.yaml files into Suite structures.
+// Parser reads and parses chiperka.yaml files into Suite structures.
 type Parser struct{}
 
 // New creates a new Parser instance.
@@ -35,7 +35,7 @@ type ParseResult struct {
 	Errors []error
 }
 
-// ParseFile reads a single spark.yaml file and returns a Suite.
+// ParseFile reads a single chiperka.yaml file and returns a Suite.
 func (p *Parser) ParseFile(filePath string) (*model.Suite, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -71,7 +71,7 @@ func (p *Parser) ParseBytes(data []byte) (*model.Suite, error) {
 	return &suite, nil
 }
 
-// ParseAll reads multiple spark files and returns a test collection.
+// ParseAll reads multiple chiperka files and returns a test collection.
 // All files are parsed as test files.
 func (p *Parser) ParseAll(filePaths []string) *ParseResult {
 	result := &ParseResult{

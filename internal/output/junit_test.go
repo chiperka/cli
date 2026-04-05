@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/model"
 )
 
 func TestJUnit_WriteBytes_Empty(t *testing.T) {
@@ -29,8 +29,8 @@ func TestJUnit_WriteBytes_Empty(t *testing.T) {
 	if err := xml.Unmarshal(data, &suites); err != nil {
 		t.Fatalf("invalid XML: %v", err)
 	}
-	if suites.Name != "Spark" {
-		t.Errorf("expected name 'Spark', got %q", suites.Name)
+	if suites.Name != "Chiperka" {
+		t.Errorf("expected name 'Chiperka', got %q", suites.Name)
 	}
 	if suites.Tests != 0 {
 		t.Errorf("expected 0 tests, got %d", suites.Tests)
@@ -51,7 +51,7 @@ func TestJUnit_WriteBytes_PassedTests(t *testing.T) {
 	result := &model.RunResult{
 		SuiteResults: []model.SuiteResult{
 			{
-				Suite: model.Suite{Name: "auth-suite", FilePath: "tests/auth.spark"},
+				Suite: model.Suite{Name: "auth-suite", FilePath: "tests/auth.chiperka"},
 				TestResults: []model.TestResult{
 					{
 						Test:     model.Test{Name: "login-success"},
@@ -98,8 +98,8 @@ func TestJUnit_WriteBytes_PassedTests(t *testing.T) {
 	if suite.Name != "auth-suite" {
 		t.Errorf("expected suite name 'auth-suite', got %q", suite.Name)
 	}
-	if suite.File != "tests/auth.spark" {
-		t.Errorf("expected file path 'tests/auth.spark', got %q", suite.File)
+	if suite.File != "tests/auth.chiperka" {
+		t.Errorf("expected file path 'tests/auth.chiperka', got %q", suite.File)
 	}
 	if suite.Timestamp == "" {
 		t.Errorf("expected timestamp on suite")
@@ -118,8 +118,8 @@ func TestJUnit_WriteBytes_PassedTests(t *testing.T) {
 	if tc.ClassName != "auth-suite" {
 		t.Errorf("expected class name 'auth-suite', got %q", tc.ClassName)
 	}
-	if tc.File != "tests/auth.spark" {
-		t.Errorf("expected file 'tests/auth.spark', got %q", tc.File)
+	if tc.File != "tests/auth.chiperka" {
+		t.Errorf("expected file 'tests/auth.chiperka', got %q", tc.File)
 	}
 	if tc.Assertions != 2 {
 		t.Errorf("expected 2 assertions, got %d", tc.Assertions)
@@ -504,7 +504,7 @@ func TestJUnit_SuiteAttributes(t *testing.T) {
 	result := &model.RunResult{
 		SuiteResults: []model.SuiteResult{
 			{
-				Suite: model.Suite{Name: "suite1", FilePath: "tests/suite1.spark"},
+				Suite: model.Suite{Name: "suite1", FilePath: "tests/suite1.chiperka"},
 				TestResults: []model.TestResult{
 					{Test: model.Test{Name: "t1"}, Status: model.StatusPassed, Duration: 100 * time.Millisecond},
 					{Test: model.Test{Name: "t2"}, Status: model.StatusFailed, Duration: 200 * time.Millisecond},
@@ -538,8 +538,8 @@ func TestJUnit_SuiteAttributes(t *testing.T) {
 	if suite.Skipped != 1 {
 		t.Errorf("expected 1 skipped, got %d", suite.Skipped)
 	}
-	if suite.File != "tests/suite1.spark" {
-		t.Errorf("expected file 'tests/suite1.spark', got %q", suite.File)
+	if suite.File != "tests/suite1.chiperka" {
+		t.Errorf("expected file 'tests/suite1.chiperka', got %q", suite.File)
 	}
 	if suite.Timestamp == "" {
 		t.Errorf("expected timestamp on suite")
@@ -557,7 +557,7 @@ func TestJUnit_TestCaseFile(t *testing.T) {
 	result := &model.RunResult{
 		SuiteResults: []model.SuiteResult{
 			{
-				Suite: model.Suite{Name: "auth", FilePath: "tests/auth.spark"},
+				Suite: model.Suite{Name: "auth", FilePath: "tests/auth.chiperka"},
 				TestResults: []model.TestResult{
 					{Test: model.Test{Name: "login"}, Status: model.StatusPassed, Duration: 50 * time.Millisecond},
 				},
@@ -576,8 +576,8 @@ func TestJUnit_TestCaseFile(t *testing.T) {
 	}
 
 	tc := suites.Suites[0].TestCases[0]
-	if tc.File != "tests/auth.spark" {
-		t.Errorf("expected file 'tests/auth.spark' on testcase, got %q", tc.File)
+	if tc.File != "tests/auth.chiperka" {
+		t.Errorf("expected file 'tests/auth.chiperka' on testcase, got %q", tc.File)
 	}
 }
 
@@ -694,7 +694,7 @@ func TestJUnit_WriteBytes_Snapshots(t *testing.T) {
 			result: &model.RunResult{
 				SuiteResults: []model.SuiteResult{
 					{
-						Suite: model.Suite{Name: "auth-suite", FilePath: "tests/auth.spark"},
+						Suite: model.Suite{Name: "auth-suite", FilePath: "tests/auth.chiperka"},
 						TestResults: []model.TestResult{
 							{
 								Test:     model.Test{Name: "login-success"},
@@ -715,7 +715,7 @@ func TestJUnit_WriteBytes_Snapshots(t *testing.T) {
 			result: &model.RunResult{
 				SuiteResults: []model.SuiteResult{
 					{
-						Suite: model.Suite{Name: "api-suite", FilePath: "tests/api.spark"},
+						Suite: model.Suite{Name: "api-suite", FilePath: "tests/api.chiperka"},
 						TestResults: []model.TestResult{
 							{
 								Test:   model.Test{Name: "validate-response"},
@@ -737,7 +737,7 @@ func TestJUnit_WriteBytes_Snapshots(t *testing.T) {
 			result: &model.RunResult{
 				SuiteResults: []model.SuiteResult{
 					{
-						Suite: model.Suite{Name: "timeout-suite", FilePath: "tests/timeout.spark"},
+						Suite: model.Suite{Name: "timeout-suite", FilePath: "tests/timeout.chiperka"},
 						TestResults: []model.TestResult{
 							{
 								Test:     model.Test{Name: "timeout-test"},
@@ -755,7 +755,7 @@ func TestJUnit_WriteBytes_Snapshots(t *testing.T) {
 			result: &model.RunResult{
 				SuiteResults: []model.SuiteResult{
 					{
-						Suite: model.Suite{Name: "misc-suite", FilePath: "tests/misc.spark"},
+						Suite: model.Suite{Name: "misc-suite", FilePath: "tests/misc.chiperka"},
 						TestResults: []model.TestResult{
 							{Test: model.Test{Name: "disabled-test"}, Status: model.StatusSkipped},
 							{Test: model.Test{Name: "active-test"}, Status: model.StatusPassed, Duration: 100 * time.Millisecond},
@@ -769,7 +769,7 @@ func TestJUnit_WriteBytes_Snapshots(t *testing.T) {
 			result: &model.RunResult{
 				SuiteResults: []model.SuiteResult{
 					{
-						Suite: model.Suite{Name: "log-suite", FilePath: "tests/logs.spark"},
+						Suite: model.Suite{Name: "log-suite", FilePath: "tests/logs.chiperka"},
 						TestResults: []model.TestResult{
 							{
 								Test:     model.Test{Name: "test-with-logs"},
@@ -791,14 +791,14 @@ func TestJUnit_WriteBytes_Snapshots(t *testing.T) {
 			result: &model.RunResult{
 				SuiteResults: []model.SuiteResult{
 					{
-						Suite: model.Suite{Name: "auth-suite", FilePath: "tests/auth.spark"},
+						Suite: model.Suite{Name: "auth-suite", FilePath: "tests/auth.chiperka"},
 						TestResults: []model.TestResult{
 							{Test: model.Test{Name: "login"}, Status: model.StatusPassed, Duration: 300 * time.Millisecond},
 							{Test: model.Test{Name: "register"}, Status: model.StatusPassed, Duration: 500 * time.Millisecond},
 						},
 					},
 					{
-						Suite: model.Suite{Name: "api-suite", FilePath: "tests/api.spark"},
+						Suite: model.Suite{Name: "api-suite", FilePath: "tests/api.chiperka"},
 						TestResults: []model.TestResult{
 							{Test: model.Test{Name: "get-users"}, Status: model.StatusPassed, Duration: 200 * time.Millisecond},
 							{
@@ -819,7 +819,7 @@ func TestJUnit_WriteBytes_Snapshots(t *testing.T) {
 			result: &model.RunResult{
 				SuiteResults: []model.SuiteResult{
 					{
-						Suite: model.Suite{Name: "full-suite", FilePath: "tests/full.spark"},
+						Suite: model.Suite{Name: "full-suite", FilePath: "tests/full.chiperka"},
 						TestResults: []model.TestResult{
 							{
 								Test:     model.Test{Name: "passing-test"},
@@ -883,7 +883,7 @@ func TestJUnit_Write_Snapshot(t *testing.T) {
 	result := &model.RunResult{
 		SuiteResults: []model.SuiteResult{
 			{
-				Suite: model.Suite{Name: "auth-suite", FilePath: "tests/auth.spark"},
+				Suite: model.Suite{Name: "auth-suite", FilePath: "tests/auth.chiperka"},
 				TestResults: []model.TestResult{
 					{Test: model.Test{Name: "login"}, Status: model.StatusPassed, Duration: 500 * time.Millisecond},
 					{Test: model.Test{Name: "register"}, Status: model.StatusFailed, Duration: 300 * time.Millisecond,
@@ -910,7 +910,7 @@ func TestJUnit_Write_Snapshot(t *testing.T) {
 	// Write() uses time.Since for total time, so normalize that too
 	normalized := normalizeJUnitXML(string(data))
 	// The root <testsuites> time attr is dynamic from time.Since
-	timeRe := regexp.MustCompile(`<testsuites name="Spark" tests="\d+" failures="\d+" errors="\d+" skipped="\d+" time="[^"]*"`)
+	timeRe := regexp.MustCompile(`<testsuites name="Chiperka" tests="\d+" failures="\d+" errors="\d+" skipped="\d+" time="[^"]*"`)
 	normalized = timeRe.ReplaceAllStringFunc(normalized, func(s string) string {
 		re := regexp.MustCompile(`time="[^"]*"`)
 		return re.ReplaceAllString(s, `time="__TOTAL_TIME__"`)

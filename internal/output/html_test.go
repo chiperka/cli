@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/model"
 )
 
 func TestHTML_WriteTestReport_HasBackLink(t *testing.T) {
@@ -22,7 +22,7 @@ func TestHTML_WriteTestReport_HasBackLink(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	filePath, err := w.WriteTestReport(testResult, "auth-suite", "tests/auth.spark", dir)
+	filePath, err := w.WriteTestReport(testResult, "auth-suite", "tests/auth.chiperka", dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestHTML_WriteTestReport_Snapshots(t *testing.T) {
 				}
 			},
 			suiteName: "auth-suite",
-			suiteFile: "tests/auth.spark",
+			suiteFile: "tests/auth.chiperka",
 		},
 		{
 			name: "test_report_failed_assertions",
@@ -186,7 +186,7 @@ func TestHTML_WriteTestReport_Snapshots(t *testing.T) {
 				}
 			},
 			suiteName: "users-suite",
-			suiteFile: "tests/users.spark",
+			suiteFile: "tests/users.chiperka",
 		},
 		{
 			name: "test_report_error",
@@ -210,7 +210,7 @@ func TestHTML_WriteTestReport_Snapshots(t *testing.T) {
 				}
 			},
 			suiteName: "timeout-suite",
-			suiteFile: "tests/timeout.spark",
+			suiteFile: "tests/timeout.chiperka",
 		},
 		{
 			name: "test_report_skipped",
@@ -230,7 +230,7 @@ func TestHTML_WriteTestReport_Snapshots(t *testing.T) {
 				}
 			},
 			suiteName: "misc-suite",
-			suiteFile: "tests/misc.spark",
+			suiteFile: "tests/misc.chiperka",
 		},
 		{
 			name: "test_report_with_setup",
@@ -299,7 +299,7 @@ func TestHTML_WriteTestReport_Snapshots(t *testing.T) {
 				}
 			},
 			suiteName: "setup-suite",
-			suiteFile: "tests/setup.spark",
+			suiteFile: "tests/setup.chiperka",
 		},
 		{
 			name: "test_report_cli_execution",
@@ -352,7 +352,7 @@ func TestHTML_WriteTestReport_Snapshots(t *testing.T) {
 				}
 			},
 			suiteName: "cli-suite",
-			suiteFile: "tests/cli.spark",
+			suiteFile: "tests/cli.chiperka",
 		},
 		{
 			name: "test_report_full",
@@ -484,7 +484,7 @@ func TestHTML_WriteTestReport_Snapshots(t *testing.T) {
 				}
 			},
 			suiteName: "full-suite",
-			suiteFile: "tests/full.spark",
+			suiteFile: "tests/full.chiperka",
 		},
 		{
 			name: "test_report_snapshot_assertion",
@@ -510,7 +510,7 @@ func TestHTML_WriteTestReport_Snapshots(t *testing.T) {
 				}
 			},
 			suiteName: "snapshot-suite",
-			suiteFile: "tests/snapshot.spark",
+			suiteFile: "tests/snapshot.chiperka",
 		},
 	}
 
@@ -548,7 +548,7 @@ func TestHTML_WriteDashboard_Snapshots(t *testing.T) {
 			result: &model.RunResult{
 				SuiteResults: []model.SuiteResult{
 					{
-						Suite: model.Suite{Name: "auth-suite", FilePath: "tests/auth.spark"},
+						Suite: model.Suite{Name: "auth-suite", FilePath: "tests/auth.chiperka"},
 						TestResults: []model.TestResult{
 							{Test: model.Test{Name: "login"}, Status: model.StatusPassed, Duration: 500 * time.Millisecond, UUID: "uuid-1"},
 							{Test: model.Test{Name: "register"}, Status: model.StatusPassed, Duration: 800 * time.Millisecond, UUID: "uuid-2"},
@@ -564,7 +564,7 @@ func TestHTML_WriteDashboard_Snapshots(t *testing.T) {
 			result: &model.RunResult{
 				SuiteResults: []model.SuiteResult{
 					{
-						Suite: model.Suite{Name: "api-suite", FilePath: "tests/api.spark"},
+						Suite: model.Suite{Name: "api-suite", FilePath: "tests/api.chiperka"},
 						TestResults: []model.TestResult{
 							{Test: model.Test{Name: "get-users", Tags: []string{"api"}}, Status: model.StatusPassed, Duration: 300 * time.Millisecond, UUID: "uuid-a1"},
 							{Test: model.Test{Name: "create-user"}, Status: model.StatusFailed, Duration: 500 * time.Millisecond, UUID: "uuid-a2"},
@@ -572,7 +572,7 @@ func TestHTML_WriteDashboard_Snapshots(t *testing.T) {
 						},
 					},
 					{
-						Suite: model.Suite{Name: "misc-suite", FilePath: "tests/misc.spark"},
+						Suite: model.Suite{Name: "misc-suite", FilePath: "tests/misc.chiperka"},
 						TestResults: []model.TestResult{
 							{Test: model.Test{Name: "health-check"}, Status: model.StatusPassed, Duration: 100 * time.Millisecond, UUID: "uuid-b1"},
 							{Test: model.Test{Name: "disabled-test"}, Status: model.StatusSkipped, Duration: 0, UUID: "uuid-b2"},

@@ -11,7 +11,7 @@ var defaultConfigFile string
 // Run starts the MCP server over stdio.
 func Run(version, contextText, configFile string) error {
 	defaultConfigFile = configFile
-	s := server.NewMCPServer("spark", version)
+	s := server.NewMCPServer("chiperka", version)
 
 	s.AddTool(contextTool(), handleContext(contextText))
 	s.AddTool(listTool(), handleList)

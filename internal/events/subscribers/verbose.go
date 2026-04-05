@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"spark-cli/internal/events"
+	"chiperka-cli/internal/events"
 )
 
 const (

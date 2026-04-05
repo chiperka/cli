@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/model"
 )
 
 // --- CollectSnapshotFiles ---
@@ -33,7 +33,7 @@ func TestCollectSnapshotFiles_ResponseBodySnapshot(t *testing.T) {
 	suites := []SuiteSubmission{
 		{
 			Name:     "suite1",
-			FilePath: filepath.Join(dir, "tests", "suite.spark"),
+			FilePath: filepath.Join(dir, "tests", "suite.chiperka"),
 			Tests: []model.Test{
 				{
 					Name: "test1",
@@ -79,7 +79,7 @@ func TestCollectSnapshotFiles_NoSnapshots(t *testing.T) {
 	suites := []SuiteSubmission{
 		{
 			Name:     "suite1",
-			FilePath: "tests/suite.spark",
+			FilePath: "tests/suite.chiperka",
 			Tests: []model.Test{
 				{
 					Name: "test1",
@@ -114,7 +114,7 @@ func TestCollectSnapshotFiles_Deduplication(t *testing.T) {
 	suites := []SuiteSubmission{
 		{
 			Name:     "suite1",
-			FilePath: filepath.Join(dir, "tests", "suite.spark"),
+			FilePath: filepath.Join(dir, "tests", "suite.chiperka"),
 			Tests: []model.Test{
 				{
 					Name: "test1",
@@ -158,7 +158,7 @@ func TestCollectSnapshotFiles_AllAssertionTypes(t *testing.T) {
 	suites := []SuiteSubmission{
 		{
 			Name:     "suite1",
-			FilePath: filepath.Join(dir, "tests", "suite.spark"),
+			FilePath: filepath.Join(dir, "tests", "suite.chiperka"),
 			Tests: []model.Test{
 				{
 					Name: "test1",
@@ -202,7 +202,7 @@ func TestCollectSnapshotFiles_MissingFileReturnsError(t *testing.T) {
 	suites := []SuiteSubmission{
 		{
 			Name:     "suite1",
-			FilePath: filepath.Join(dir, "tests", "suite.spark"),
+			FilePath: filepath.Join(dir, "tests", "suite.chiperka"),
 			Tests: []model.Test{
 				{
 					Name: "test1",
@@ -227,7 +227,7 @@ func TestCollectSnapshotFiles_MissingFileReturnsError(t *testing.T) {
 	if !strings.Contains(err.Error(), "missing.json") {
 		t.Errorf("error should mention the missing file, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "suite.spark") {
+	if !strings.Contains(err.Error(), "suite.chiperka") {
 		t.Errorf("error should mention the suite file, got: %v", err)
 	}
 }
@@ -244,7 +244,7 @@ func TestCollectSnapshotFiles_RelativePaths(t *testing.T) {
 	suites := []SuiteSubmission{
 		{
 			Name:     "suite1",
-			FilePath: filepath.Join(dir, "tests", "suite.spark"),
+			FilePath: filepath.Join(dir, "tests", "suite.chiperka"),
 			Tests: []model.Test{
 				{
 					Name: "test1",
@@ -421,7 +421,7 @@ func TestSnapshotPathConsistency_RelativeSuitePath(t *testing.T) {
 	os.WriteFile(filepath.Join(snapshotDir, "response.json"), []byte("data"), 0644)
 
 	// Simulate what BuildSubmission does: normalize to relative path
-	absPath := filepath.Join(dir, "tests", "suite.spark")
+	absPath := filepath.Join(dir, "tests", "suite.chiperka")
 
 	suites := []SuiteSubmission{
 		{
@@ -475,7 +475,7 @@ func TestSnapshotPathConsistency_AfterBuildSubmission(t *testing.T) {
 	tests := model.NewTestCollection()
 	tests.AddSuite(model.Suite{
 		Name:     "suite1",
-		FilePath: filepath.Join(dir, "suite.spark"),
+		FilePath: filepath.Join(dir, "suite.chiperka"),
 		Tests: []model.Test{
 			{
 				Name: "test1",
@@ -588,7 +588,7 @@ func TestSnapshotRoundTrip_UploadAndDownload(t *testing.T) {
 	os.WriteFile(filepath.Join(snapshotDir, "response.json"), []byte(`{"id":1}`), 0644)
 	os.WriteFile(filepath.Join(snapshotDir, "body.txt"), []byte("hello"), 0644)
 
-	suiteFilePath := filepath.Join(dir, "tests", "suite.spark")
+	suiteFilePath := filepath.Join(dir, "tests", "suite.chiperka")
 
 	suites := []SuiteSubmission{
 		{
@@ -665,7 +665,7 @@ func TestBuildSubmission_NormalizesFilePath(t *testing.T) {
 	tests := model.NewTestCollection()
 	tests.AddSuite(model.Suite{
 		Name:     "suite1",
-		FilePath: "tests/suite.spark", // already relative
+		FilePath: "tests/suite.chiperka", // already relative
 		Tests: []model.Test{
 			{Name: "t1"},
 		},
@@ -677,7 +677,7 @@ func TestBuildSubmission_NormalizesFilePath(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if req.Suites[0].FilePath != "tests/suite.spark" {
+	if req.Suites[0].FilePath != "tests/suite.chiperka" {
 		t.Errorf("expected relative path preserved, got %q", req.Suites[0].FilePath)
 	}
 }
@@ -687,7 +687,7 @@ func TestBuildSubmission_NormalizesAbsolutePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	absPath := filepath.Join(cwd, "tests", "suite.spark")
+	absPath := filepath.Join(cwd, "tests", "suite.chiperka")
 
 	tests := model.NewTestCollection()
 	tests.AddSuite(model.Suite{
@@ -702,7 +702,7 @@ func TestBuildSubmission_NormalizesAbsolutePath(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	expected := filepath.Join("tests", "suite.spark")
+	expected := filepath.Join("tests", "suite.chiperka")
 	if req.Suites[0].FilePath != expected {
 		t.Errorf("expected normalized path %q, got %q", expected, req.Suites[0].FilePath)
 	}
@@ -722,7 +722,7 @@ func TestCollectSnapshotFiles_MultipleSuitesDifferentDirs(t *testing.T) {
 	suites := []SuiteSubmission{
 		{
 			Name:     "auth",
-			FilePath: filepath.Join(dir, "tests/auth/suite.spark"),
+			FilePath: filepath.Join(dir, "tests/auth/suite.chiperka"),
 			Tests: []model.Test{
 				{
 					Name: "login",
@@ -736,7 +736,7 @@ func TestCollectSnapshotFiles_MultipleSuitesDifferentDirs(t *testing.T) {
 		},
 		{
 			Name:     "api",
-			FilePath: filepath.Join(dir, "tests/api/suite.spark"),
+			FilePath: filepath.Join(dir, "tests/api/suite.chiperka"),
 			Tests: []model.Test{
 				{
 					Name: "list-users",
@@ -782,7 +782,7 @@ func TestCollectSnapshotFiles_CrossSuiteDedup(t *testing.T) {
 	suites := []SuiteSubmission{
 		{
 			Name:     "suite-a",
-			FilePath: filepath.Join(dir, "tests/a.spark"),
+			FilePath: filepath.Join(dir, "tests/a.chiperka"),
 			Tests: []model.Test{{
 				Name: "test-a",
 				Assertions: []model.Assertion{{Response: &model.ResponseAssertion{
@@ -792,7 +792,7 @@ func TestCollectSnapshotFiles_CrossSuiteDedup(t *testing.T) {
 		},
 		{
 			Name:     "suite-b",
-			FilePath: filepath.Join(dir, "tests/b.spark"),
+			FilePath: filepath.Join(dir, "tests/b.chiperka"),
 			Tests: []model.Test{{
 				Name: "test-b",
 				Assertions: []model.Assertion{{Response: &model.ResponseAssertion{
@@ -816,7 +816,7 @@ func TestCollectSnapshotFiles_EmptySnapshotStringIgnored(t *testing.T) {
 	suites := []SuiteSubmission{
 		{
 			Name:     "suite1",
-			FilePath: "tests/suite.spark",
+			FilePath: "tests/suite.chiperka",
 			Tests: []model.Test{{
 				Name: "test1",
 				Assertions: []model.Assertion{
@@ -854,7 +854,7 @@ func TestCollectSnapshotFiles_NestedSubdirectory(t *testing.T) {
 	suites := []SuiteSubmission{
 		{
 			Name:     "suite1",
-			FilePath: filepath.Join(dir, "tests/api/suite.spark"),
+			FilePath: filepath.Join(dir, "tests/api/suite.chiperka"),
 			Tests: []model.Test{{
 				Name: "test1",
 				Assertions: []model.Assertion{{Response: &model.ResponseAssertion{
@@ -929,7 +929,7 @@ func TestBuildSubmission_PreservesVersion(t *testing.T) {
 	tests := model.NewTestCollection()
 	tests.AddSuite(model.Suite{
 		Name:     "suite1",
-		FilePath: "tests/suite.spark",
+		FilePath: "tests/suite.chiperka",
 		Tests:    []model.Test{{Name: "t1"}},
 	})
 
@@ -948,12 +948,12 @@ func TestBuildSubmission_MultipleSuites(t *testing.T) {
 	tests := model.NewTestCollection()
 	tests.AddSuite(model.Suite{
 		Name:     "auth",
-		FilePath: "tests/auth/suite.spark",
+		FilePath: "tests/auth/suite.chiperka",
 		Tests:    []model.Test{{Name: "login"}, {Name: "logout"}},
 	})
 	tests.AddSuite(model.Suite{
 		Name:     "api",
-		FilePath: "tests/api/suite.spark",
+		FilePath: "tests/api/suite.chiperka",
 		Tests:    []model.Test{{Name: "users"}},
 	})
 
@@ -1000,7 +1000,7 @@ func TestRunGoFlow_BuildSubmissionThenCollectSnapshots(t *testing.T) {
 	os.WriteFile(filepath.Join(snapshotDir, "response.json"), []byte(`{"status":"ok"}`), 0644)
 
 	// Step 1: Parser produces absolute path
-	absFilePath := filepath.Join(testDir, "tests", "api", "suite.spark")
+	absFilePath := filepath.Join(testDir, "tests", "api", "suite.chiperka")
 
 	tests := model.NewTestCollection()
 	tests.AddSuite(model.Suite{

@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"spark-cli/internal/envfile"
+	"chiperka-cli/internal/envfile"
 )
 
 // Exit codes for the CLI.
@@ -40,9 +40,9 @@ func exitErrorf(code int, format string, args ...interface{}) *ExitError {
 var envFiles []string
 
 var rootCmd = &cobra.Command{
-	Use:     "spark",
+	Use:     "chiperka",
 	Short:   "Integration test runner with Docker isolation",
-	Long:    `Spark discovers and executes integration tests defined in *.spark files, running each test in isolated Docker containers with dedicated networks.`,
+	Long:    `Chiperka discovers and executes integration tests defined in *.chiperka files, running each test in isolated Docker containers with dedicated networks.`,
 	Version: Version,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if len(envFiles) > 0 {

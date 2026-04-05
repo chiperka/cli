@@ -14,9 +14,9 @@ const (
 )
 
 // CurlImage returns the curl image to use for HTTP requests in Docker networks.
-// Override with SPARK_INTERNAL_CURL_IMAGE env variable.
+// Override with CHIPERKA_INTERNAL_CURL_IMAGE env variable.
 func CurlImage() string {
-	if img := os.Getenv("SPARK_INTERNAL_CURL_IMAGE"); img != "" {
+	if img := os.Getenv("CHIPERKA_INTERNAL_CURL_IMAGE"); img != "" {
 		return img
 	}
 	return defaultCurlImage

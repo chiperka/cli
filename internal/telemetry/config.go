@@ -13,7 +13,7 @@ type TelemetryConfig struct {
 	NoticeShown bool `json:"notice_shown"`
 }
 
-// MachineConfig is the top-level structure for ~/.spark/config.json.
+// MachineConfig is the top-level structure for ~/.chiperka/config.json.
 type MachineConfig struct {
 	Telemetry TelemetryConfig `json:"telemetry"`
 	UpdatedAt time.Time       `json:"updated_at"`
@@ -26,16 +26,16 @@ type legacyConfig struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// configDir returns the path to ~/.spark/
+// configDir returns the path to ~/.chiperka/
 func configDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".spark")
+	return filepath.Join(home, ".chiperka")
 }
 
-// configPath returns the path to ~/.spark/config.json
+// configPath returns the path to ~/.chiperka/config.json
 func configPath() string {
 	dir := configDir()
 	if dir == "" {
@@ -44,7 +44,7 @@ func configPath() string {
 	return filepath.Join(dir, "config.json")
 }
 
-// legacyConfigPath returns the path to the old ~/.spark/telemetry.json
+// legacyConfigPath returns the path to the old ~/.chiperka/telemetry.json
 func legacyConfigPath() string {
 	dir := configDir()
 	if dir == "" {
@@ -53,7 +53,7 @@ func legacyConfigPath() string {
 	return filepath.Join(dir, "telemetry.json")
 }
 
-// LoadConfig reads the telemetry config from ~/.spark/config.json.
+// LoadConfig reads the telemetry config from ~/.chiperka/config.json.
 // If config.json is missing but telemetry.json exists, migrates the old format.
 // Returns nil if no config exists or can't be read.
 func LoadConfig() *TelemetryConfig {
@@ -96,7 +96,7 @@ func LoadConfig() *TelemetryConfig {
 	return tc
 }
 
-// LoadMachineConfig reads the full machine config from ~/.spark/config.json.
+// LoadMachineConfig reads the full machine config from ~/.chiperka/config.json.
 // Returns nil if no config exists or can't be read.
 func LoadMachineConfig() *MachineConfig {
 	path := configPath()
@@ -117,10 +117,10 @@ func LoadMachineConfig() *MachineConfig {
 	return &cfg
 }
 
-// SaveConfig writes the telemetry config to ~/.spark/config.json.
+// SaveConfig writes the telemetry config to ~/.chiperka/config.json.
 // Loads the existing MachineConfig first to preserve other sections,
 // then updates .Telemetry and .UpdatedAt.
-// Creates ~/.spark/ if it doesn't exist. Silently ignores errors.
+// Creates ~/.chiperka/ if it doesn't exist. Silently ignores errors.
 func SaveConfig(cfg *TelemetryConfig) {
 	dir := configDir()
 	if dir == "" {

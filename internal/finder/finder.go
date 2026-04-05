@@ -9,7 +9,7 @@ import (
 
 const (
 	// TestFileSuffix is the required suffix for test definition files.
-	TestFileSuffix = ".spark"
+	TestFileSuffix = ".chiperka"
 )
 
 // Finder discovers test files in a directory tree.
@@ -24,7 +24,7 @@ func New(rootPath string) *Finder {
 	}
 }
 
-// FindTestFiles walks the directory tree and returns all files matching *.spark pattern.
+// FindTestFiles walks the directory tree and returns all files matching *.chiperka pattern.
 // Returns an error if the root directory cannot be accessed.
 func (f *Finder) FindTestFiles() ([]string, error) {
 	var files []string

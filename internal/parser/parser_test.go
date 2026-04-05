@@ -15,7 +15,7 @@ func testdataPath(t *testing.T, name string) string {
 
 func TestParser_ParseFile_Simple(t *testing.T) {
 	p := New()
-	suite, err := p.ParseFile(testdataPath(t, "valid-simple.spark"))
+	suite, err := p.ParseFile(testdataPath(t, "valid-simple.chiperka"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestParser_ParseFile_Simple(t *testing.T) {
 
 func TestParser_ParseFile_Full(t *testing.T) {
 	p := New()
-	suite, err := p.ParseFile(testdataPath(t, "valid-full.spark"))
+	suite, err := p.ParseFile(testdataPath(t, "valid-full.chiperka"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestParser_ParseFile_Full(t *testing.T) {
 
 func TestParser_ParseFile_SetsFilePath(t *testing.T) {
 	p := New()
-	path := testdataPath(t, "valid-simple.spark")
+	path := testdataPath(t, "valid-simple.chiperka")
 	suite, err := p.ParseFile(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -77,7 +77,7 @@ func TestParser_ParseFile_SetsFilePath(t *testing.T) {
 
 func TestParser_ParseFile_Invalid(t *testing.T) {
 	p := New()
-	_, err := p.ParseFile(testdataPath(t, "invalid.spark"))
+	_, err := p.ParseFile(testdataPath(t, "invalid.chiperka"))
 	if err == nil {
 		t.Errorf("expected error for invalid YAML")
 	}
@@ -85,7 +85,7 @@ func TestParser_ParseFile_Invalid(t *testing.T) {
 
 func TestParser_ParseFile_NonExistent(t *testing.T) {
 	p := New()
-	_, err := p.ParseFile("testdata/nonexistent.spark")
+	_, err := p.ParseFile("testdata/nonexistent.chiperka")
 	if err == nil {
 		t.Errorf("expected error for non-existent file")
 	}
@@ -121,8 +121,8 @@ func TestParser_ParseBytes_Invalid(t *testing.T) {
 func TestParser_ParseAll_MultipleFiles(t *testing.T) {
 	p := New()
 	files := []string{
-		testdataPath(t, "valid-simple.spark"),
-		testdataPath(t, "valid-multi.spark"),
+		testdataPath(t, "valid-simple.chiperka"),
+		testdataPath(t, "valid-multi.chiperka"),
 	}
 	result := p.ParseAll(files)
 	if len(result.Errors) != 0 {
@@ -139,8 +139,8 @@ func TestParser_ParseAll_MultipleFiles(t *testing.T) {
 func TestParser_ParseAll_WithInvalidFile(t *testing.T) {
 	p := New()
 	files := []string{
-		testdataPath(t, "valid-simple.spark"),
-		testdataPath(t, "invalid.spark"),
+		testdataPath(t, "valid-simple.chiperka"),
+		testdataPath(t, "invalid.chiperka"),
 	}
 	result := p.ParseAll(files)
 	if len(result.Errors) != 1 {
@@ -164,7 +164,7 @@ func TestParser_ParseAll_Empty(t *testing.T) {
 
 func TestParser_ParseAll_NonExistentFile(t *testing.T) {
 	p := New()
-	result := p.ParseAll([]string{"testdata/nonexistent.spark"})
+	result := p.ParseAll([]string{"testdata/nonexistent.chiperka"})
 	if len(result.Errors) != 1 {
 		t.Errorf("expected 1 error, got %d", len(result.Errors))
 	}
@@ -173,15 +173,15 @@ func TestParser_ParseAll_NonExistentFile(t *testing.T) {
 // --- Environment variable expansion ---
 
 func TestParser_EnvVarExpansion(t *testing.T) {
-	os.Setenv("SPARK_TEST_TARGET", "http://localhost:9090")
-	os.Setenv("SPARK_TEST_PATH", "users")
+	os.Setenv("CHIPERKA_TEST_TARGET", "http://localhost:9090")
+	os.Setenv("CHIPERKA_TEST_PATH", "users")
 	t.Cleanup(func() {
-		os.Unsetenv("SPARK_TEST_TARGET")
-		os.Unsetenv("SPARK_TEST_PATH")
+		os.Unsetenv("CHIPERKA_TEST_TARGET")
+		os.Unsetenv("CHIPERKA_TEST_PATH")
 	})
 
 	p := New()
-	suite, err := p.ParseFile(testdataPath(t, "env-vars.spark"))
+	suite, err := p.ParseFile(testdataPath(t, "env-vars.chiperka"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -195,11 +195,11 @@ func TestParser_EnvVarExpansion(t *testing.T) {
 }
 
 func TestParser_EnvVarExpansion_Unset(t *testing.T) {
-	os.Unsetenv("SPARK_TEST_TARGET")
-	os.Unsetenv("SPARK_TEST_PATH")
+	os.Unsetenv("CHIPERKA_TEST_TARGET")
+	os.Unsetenv("CHIPERKA_TEST_PATH")
 
 	p := New()
-	suite, err := p.ParseFile(testdataPath(t, "env-vars.spark"))
+	suite, err := p.ParseFile(testdataPath(t, "env-vars.chiperka"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -210,8 +210,8 @@ func TestParser_EnvVarExpansion_Unset(t *testing.T) {
 	}
 }
 
-func TestParser_EnvVarExpansion_NonSparkPrefix(t *testing.T) {
-	// $HOME should NOT be expanded (only $SPARK_ prefix)
+func TestParser_EnvVarExpansion_NonChiperkaPrefix(t *testing.T) {
+	// $HOME should NOT be expanded (only $CHIPERKA_ prefix)
 	p := New()
 	yaml := []byte("name: test\ntests:\n  - name: t\n    execution:\n      target: $HOME/api\n      request:\n        method: GET\n        url: /test\n    assertions: []")
 	suite, err := p.ParseBytes(yaml)

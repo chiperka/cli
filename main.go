@@ -1,7 +1,7 @@
 package main
 
 import (
-	"spark-cli/cmd"
+	"chiperka-cli/cmd"
 )
 
 func main() {

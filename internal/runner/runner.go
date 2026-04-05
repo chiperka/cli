@@ -18,13 +18,13 @@ import (
 	"sync"
 	"time"
 
-	"spark-cli/internal/artifact"
-	"spark-cli/internal/assertion"
-	"spark-cli/internal/docker"
-	"spark-cli/internal/events"
-	"spark-cli/internal/events/subscribers"
-	"spark-cli/internal/executor"
-	"spark-cli/internal/model"
+	"chiperka-cli/internal/artifact"
+	"chiperka-cli/internal/assertion"
+	"chiperka-cli/internal/docker"
+	"chiperka-cli/internal/events"
+	"chiperka-cli/internal/events/subscribers"
+	"chiperka-cli/internal/executor"
+	"chiperka-cli/internal/model"
 )
 
 // generateUUID generates a random UUID v4.
@@ -1559,7 +1559,7 @@ func (r *Runner) executeHTTPInNetwork(ctx context.Context, execution model.Execu
 		if err != nil {
 			return nil, fmt.Errorf("failed to read body file %q: %w", filePath, err)
 		}
-		files = map[string][]byte{"tmp/spark-body": content}
+		files = map[string][]byte{"tmp/chiperka-body": content}
 	} else if reqBody.IsMultipart() {
 		files = make(map[string][]byte)
 		for name, field := range reqBody.Multipart {
@@ -1569,7 +1569,7 @@ func (r *Runner) executeHTTPInNetwork(ctx context.Context, execution model.Execu
 				if err != nil {
 					return nil, fmt.Errorf("failed to read multipart file %q for field %q: %w", filePath, name, err)
 				}
-				files[fmt.Sprintf("tmp/spark-mp-%s", name)] = content
+				files[fmt.Sprintf("tmp/chiperka-mp-%s", name)] = content
 			}
 		}
 	}
@@ -1583,7 +1583,7 @@ func (r *Runner) executeHTTPInNetwork(ctx context.Context, execution model.Execu
 	}
 
 	// Add test ID header for artifact collection (e.g., code coverage)
-	curlArgs = append(curlArgs, "-H", fmt.Sprintf("X-Spark-Test-Id: %s", uuid))
+	curlArgs = append(curlArgs, "-H", fmt.Sprintf("X-Chiperka-Test-Id: %s", uuid))
 
 	// Add headers (skip Content-Type for multipart — curl -F sets it with boundary)
 	for key, value := range execution.Request.Headers {
@@ -1597,7 +1597,7 @@ func (r *Runner) executeHTTPInNetwork(ctx context.Context, execution model.Execu
 	if reqBody.Raw != "" {
 		curlArgs = append(curlArgs, "-d", reqBody.Raw)
 	} else if reqBody.IsFile() {
-		curlArgs = append(curlArgs, "--data-binary", "@/tmp/spark-body")
+		curlArgs = append(curlArgs, "--data-binary", "@/tmp/chiperka-body")
 	} else if reqBody.IsMultipart() {
 		for name, field := range reqBody.Multipart {
 			if field.File != "" {
@@ -1609,7 +1609,7 @@ func (r *Runner) executeHTTPInNetwork(ctx context.Context, execution model.Execu
 				if mimeType == "" {
 					mimeType = "application/octet-stream"
 				}
-				curlArgs = append(curlArgs, "-F", fmt.Sprintf("%s=@/tmp/spark-mp-%s;filename=%s;type=%s", name, name, filename, mimeType))
+				curlArgs = append(curlArgs, "-F", fmt.Sprintf("%s=@/tmp/chiperka-mp-%s;filename=%s;type=%s", name, name, filename, mimeType))
 			} else {
 				curlArgs = append(curlArgs, "-F", fmt.Sprintf("%s=%s", name, field.Value))
 			}

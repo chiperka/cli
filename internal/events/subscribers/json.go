@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"spark-cli/internal/events"
+	"chiperka-cli/internal/events"
 )
 
 // JSONReporter outputs NDJSON (one JSON object per line) for machine consumption.

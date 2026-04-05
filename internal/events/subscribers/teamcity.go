@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"spark-cli/internal/events"
+	"chiperka-cli/internal/events"
 )
 
 // TeamCityReporter outputs TeamCity service messages for IntelliJ SMTestRunner.
@@ -178,9 +178,9 @@ func (tc *TeamCityReporter) locationHint(e *events.Event) string {
 	}
 	mappedPath := tc.mapPath(e.FilePath)
 	if e.TestName != "" {
-		return fmt.Sprintf("spark://%s::%s", mappedPath, e.TestName)
+		return fmt.Sprintf("chiperka://%s::%s", mappedPath, e.TestName)
 	}
-	return fmt.Sprintf("spark://%s", mappedPath)
+	return fmt.Sprintf("chiperka://%s", mappedPath)
 }
 
 func (tc *TeamCityReporter) suiteLocationHint(suite string) string {
@@ -188,7 +188,7 @@ func (tc *TeamCityReporter) suiteLocationHint(suite string) string {
 	if filePath == "" {
 		return ""
 	}
-	return fmt.Sprintf("spark://%s", tc.mapPath(filePath))
+	return fmt.Sprintf("chiperka://%s", tc.mapPath(filePath))
 }
 
 // ensureSuiteOpened emits testSuiteStarted for the suite if not already open.
