@@ -260,9 +260,16 @@ func defaultSource(s string) string {
 }
 
 // baseEvent creates an event with common fields pre-filled.
+// In CI environments, install_id is left empty to avoid generating
+// a new UUID on every ephemeral runner. Visitor tracking in CI
+// relies on visitor_id (server-side IP+UA hash) instead.
 func baseEvent(version string) *Event {
+	var installID string
+	if !isCI() {
+		installID = GetInstallID()
+	}
 	return &Event{
-		InstallID:  GetInstallID(),
+		InstallID:  installID,
 		Version:    version,
 		OS:         runtime.GOOS,
 		Arch:       runtime.GOARCH,
