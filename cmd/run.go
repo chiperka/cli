@@ -334,7 +334,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Run tests and output results
 	r, err := runner.New(bus, workerCount, artifactsDir, services, regenerateSnapshots, testTimeout, Version, collector, cpuThreshold, cfg.ExecutionVariables)
 	if err != nil {
-		telemetry.RecordError(Version, telemetry.ClassifyError(err))
+		telemetry.RecordError(Version, "run", telemetry.ClassifyError(err))
 		telemetry.Wait(4 * time.Second)
 		return fmt.Errorf("failed to create test runner: %w", err)
 	}
@@ -354,15 +354,25 @@ func runTests(cmd *cobra.Command, args []string) error {
 	result := r.Run(ctx, tests)
 
 	// Record telemetry
+	runStats := telemetry.CollectRunStats(tests, services)
 	telemetry.RecordRun(telemetry.RunParams{
-		Version:        Version,
-		DurationMs:     time.Since(startTime).Milliseconds(),
-		WorkerCount:    workerCount,
-		HasHTMLReport:  htmlOutput != "",
-		HasJUnitReport: junitOutput != "",
-		HasArtifacts:   artifactsDir != "./artifacts",
-		HasTagsFilter:  len(filterTags) > 0,
-		HasNameFilter:  filterName != "",
+		Version:          Version,
+		DurationMs:       time.Since(startTime).Milliseconds(),
+		WorkerCount:      workerCount,
+		ExecutorType:     runStats.ExecutorType,
+		ServiceCount:     runStats.ServiceCount,
+		HTMLReport:       htmlOutput != "",
+		JUnitReport:      junitOutput != "",
+		Artifacts:        artifactsDir != "./artifacts",
+		TagsFilter:       len(filterTags) > 0,
+		NameFilter:       filterName != "",
+		Snapshots:        runStats.HasSnapshots,
+		HasSetup:         runStats.HasSetup,
+		HasTeardown:      runStats.HasTeardown,
+		HasHooks:         runStats.HasHooks,
+		ServiceTemplates: runStats.HasServiceTemplates,
+		Verbose:          verboseOutput,
+		Debug:            debugOutput,
 	}, result.TotalTests(), result.TotalPassed(), result.TotalFailed(), result.TotalSkipped(), len(tests.Suites))
 
 	// Get weblink prefix for CLI output (e.g., "http://localhost:8080/reports")
@@ -493,7 +503,7 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 
 	// Health check
 	if err := client.HealthCheck(); err != nil {
-		telemetry.RecordError(Version, telemetry.ClassifyError(err))
+		telemetry.RecordError(Version, "run", telemetry.ClassifyError(err))
 		return fmt.Errorf("cloud API not reachable at %s: %w\n\nHint: run without --cloud for local execution", apiURL, err)
 	}
 
@@ -516,7 +526,7 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 	// Build submission with resolved service templates
 	submission, err := cloud.BuildSubmission(tests, services, Version, projectID)
 	if err != nil {
-		telemetry.RecordError(Version, telemetry.ClassifyError(err))
+		telemetry.RecordError(Version, "run", telemetry.ClassifyError(err))
 		return fmt.Errorf("failed to build submission: %w", err)
 	}
 
@@ -528,7 +538,7 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 	// Create run
 	resp, err := client.CreateRun(submission)
 	if err != nil {
-		telemetry.RecordError(Version, telemetry.ClassifyError(err))
+		telemetry.RecordError(Version, "run", telemetry.ClassifyError(err))
 		return fmt.Errorf("failed to create run: %w", err)
 	}
 
@@ -579,7 +589,7 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 	// Stream results — events go through the bus to all registered reporters
 	result, err := client.StreamRun(ctx, resp.ID, bus)
 	if err != nil {
-		telemetry.RecordError(Version, telemetry.ClassifyError(err))
+		telemetry.RecordError(Version, "run", telemetry.ClassifyError(err))
 		if ctx.Err() != nil {
 			return exitErrorf(ExitCancelled, "run cancelled")
 		}
@@ -634,15 +644,26 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 
 	// Record telemetry
 	total := result.Passed + result.Failed + result.Skipped
+	cloudRunStats := telemetry.CollectRunStats(tests, services)
 	telemetry.RecordRun(telemetry.RunParams{
-		Version:        Version,
-		DurationMs:     time.Since(startTime).Milliseconds(),
-		CloudMode:      true,
-		HasHTMLReport:  htmlOutput != "",
-		HasJUnitReport: junitOutput != "",
-		HasArtifacts:   artifactsDir != "",
-		HasTagsFilter:  len(filterTags) > 0,
-		HasNameFilter:  filterName != "",
+		Version:          Version,
+		DurationMs:       time.Since(startTime).Milliseconds(),
+		CloudMode:        true,
+		WorkerCount:      workerCount,
+		ExecutorType:     cloudRunStats.ExecutorType,
+		ServiceCount:     cloudRunStats.ServiceCount,
+		HTMLReport:       htmlOutput != "",
+		JUnitReport:      junitOutput != "",
+		Artifacts:        artifactsDir != "",
+		TagsFilter:       len(filterTags) > 0,
+		NameFilter:       filterName != "",
+		Snapshots:        cloudRunStats.HasSnapshots,
+		HasSetup:         cloudRunStats.HasSetup,
+		HasTeardown:      cloudRunStats.HasTeardown,
+		HasHooks:         cloudRunStats.HasHooks,
+		ServiceTemplates: cloudRunStats.HasServiceTemplates,
+		Verbose:          verboseOutput,
+		Debug:            debugOutput,
 	}, total, result.Passed, result.Failed, result.Skipped, len(tests.Suites))
 
 	// Print link

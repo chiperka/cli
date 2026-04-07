@@ -3,6 +3,9 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
+
+	"chiperka-cli/internal/telemetry"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -89,6 +92,12 @@ tests:
 `
 
 func runInit(cmd *cobra.Command, args []string) error {
+	startTime := time.Now()
+	defer func() {
+		telemetry.RecordCommand(Version, "init", true, time.Since(startTime).Milliseconds())
+		telemetry.Wait(2 * time.Second)
+	}()
+
 	// Check if chiperka.yaml already exists
 	if _, err := os.Stat("chiperka.yaml"); err == nil {
 		fmt.Println("chiperka.yaml already exists, skipping initialization")

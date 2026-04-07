@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"chiperka-cli/internal/config"
 	"chiperka-cli/internal/finder"
 	"chiperka-cli/internal/model"
 	"chiperka-cli/internal/parser"
+	"chiperka-cli/internal/telemetry"
 )
 
 var validateJSON bool
@@ -61,6 +63,12 @@ type validationIssue struct {
 }
 
 func runValidate(cmd *cobra.Command, args []string) error {
+	startTime := time.Now()
+	defer func() {
+		telemetry.RecordCommand(Version, "validate", true, time.Since(startTime).Milliseconds())
+		telemetry.Wait(2 * time.Second)
+	}()
+
 	searchPath := "."
 	if len(args) > 0 {
 		searchPath = args[0]

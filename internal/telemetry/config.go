@@ -15,6 +15,7 @@ type TelemetryConfig struct {
 
 // MachineConfig is the top-level structure for ~/.chiperka/config.json.
 type MachineConfig struct {
+	InstallID string          `json:"install_id,omitempty"`
 	Telemetry TelemetryConfig `json:"telemetry"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }
@@ -142,6 +143,39 @@ func SaveConfig(cfg *TelemetryConfig) {
 		json.Unmarshal(data, &machine)
 	}
 
+	machine.Telemetry = *cfg
+	machine.UpdatedAt = time.Now()
+
+	data, err := json.MarshalIndent(machine, "", "  ")
+	if err != nil {
+		return
+	}
+
+	os.WriteFile(path, data, 0o644)
+}
+
+// saveMachineConfigWithInstallID saves telemetry config + install ID.
+func saveMachineConfigWithInstallID(cfg *TelemetryConfig, installID string) {
+	dir := configDir()
+	if dir == "" {
+		return
+	}
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+
+	path := configPath()
+	if path == "" {
+		return
+	}
+
+	var machine MachineConfig
+	if data, err := os.ReadFile(path); err == nil {
+		json.Unmarshal(data, &machine)
+	}
+
+	machine.InstallID = installID
 	machine.Telemetry = *cfg
 	machine.UpdatedAt = time.Now()
 
