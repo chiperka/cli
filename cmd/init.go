@@ -92,9 +92,10 @@ tests:
 `
 
 func runInit(cmd *cobra.Command, args []string) error {
+	telemetry.ShowNoticeIfNeeded(false)
 	startTime := time.Now()
 	defer func() {
-		telemetry.RecordCommand(Version, "init", true, time.Since(startTime).Milliseconds())
+		telemetry.RecordCommand(Version, "init", "", true, time.Since(startTime).Milliseconds())
 		telemetry.Wait(2 * time.Second)
 	}()
 

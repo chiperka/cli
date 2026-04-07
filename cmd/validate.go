@@ -63,9 +63,10 @@ type validationIssue struct {
 }
 
 func runValidate(cmd *cobra.Command, args []string) error {
+	telemetry.ShowNoticeIfNeeded(validateJSON)
 	startTime := time.Now()
 	defer func() {
-		telemetry.RecordCommand(Version, "validate", true, time.Since(startTime).Milliseconds())
+		telemetry.RecordCommand(Version, "validate", "", true, time.Since(startTime).Milliseconds())
 		telemetry.Wait(2 * time.Second)
 	}()
 

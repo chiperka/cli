@@ -21,6 +21,7 @@ type Event struct {
 
 	// Command
 	Command    string `json:"command"`
+	Source     string `json:"source,omitempty"` // "cli" (default), "mcp"
 	Success    bool   `json:"success"`
 	DurationMs int64  `json:"duration_ms,omitempty"`
 	ErrorType  string `json:"error_type,omitempty"`
@@ -61,6 +62,7 @@ type Event struct {
 // RunParams holds the context from cmd/run.go needed to build a telemetry event.
 type RunParams struct {
 	Version      string
+	Source       string // "cli" or "mcp", defaults to "cli"
 	DurationMs   int64
 	WorkerCount  int
 	CloudMode    bool
@@ -123,13 +125,15 @@ func ShowNoticeIfNeeded(teamcityMode bool) {
 }
 
 // RecordCommand records any CLI command invocation. Fire-and-forget.
-func RecordCommand(version, command string, success bool, durationMs int64) {
+// source is optional — defaults to "cli". Pass "mcp" for MCP tool calls.
+func RecordCommand(version, command, source string, success bool, durationMs int64) {
 	if IsDisabled() {
 		return
 	}
 
 	event := baseEvent(version)
 	event.Command = command
+	event.Source = defaultSource(source)
 	event.Success = success
 	event.DurationMs = durationMs
 
@@ -148,6 +152,7 @@ func RecordRun(params RunParams, testsTotal, testsPassed, testsFailed, testsSkip
 
 	event := baseEvent(params.Version)
 	event.Command = "run"
+	event.Source = defaultSource(params.Source)
 	event.Success = testsFailed == 0
 	event.DurationMs = params.DurationMs
 
@@ -184,13 +189,15 @@ func RecordRun(params RunParams, testsTotal, testsPassed, testsFailed, testsSkip
 }
 
 // RecordError records an error event. Fire-and-forget.
-func RecordError(version, command, errType string) {
+// source is optional — defaults to "cli".
+func RecordError(version, command, source, errType string) {
 	if IsDisabled() {
 		return
 	}
 
 	event := baseEvent(version)
 	event.Command = command
+	event.Source = defaultSource(source)
 	event.Success = false
 	event.ErrorType = errType
 
@@ -243,6 +250,13 @@ func Wait(timeout time.Duration) {
 	case <-done:
 	case <-time.After(timeout):
 	}
+}
+
+func defaultSource(s string) string {
+	if s == "" {
+		return "cli"
+	}
+	return s
 }
 
 // baseEvent creates an event with common fields pre-filled.

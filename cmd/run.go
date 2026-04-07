@@ -113,6 +113,8 @@ func init() {
 
 // runTests is the main entry point for the run command.
 func runTests(cmd *cobra.Command, args []string) error {
+	defer telemetry.Wait(4 * time.Second)
+
 	// Determine the search path
 	searchPath := "."
 	if len(args) > 0 {
@@ -286,7 +288,6 @@ func runTests(cmd *cobra.Command, args []string) error {
 			projectSlug = cfg.Cloud.Project
 		}
 		err := runTestsCloud(cloudURL, tests, services, startTime, bus, emitter, cloudArtifactsDir, projectSlug)
-		telemetry.Wait(4 * time.Second)
 		return err // runTestsCloud already wraps with ExitError
 	}
 
@@ -334,8 +335,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Run tests and output results
 	r, err := runner.New(bus, workerCount, artifactsDir, services, regenerateSnapshots, testTimeout, Version, collector, cpuThreshold, cfg.ExecutionVariables)
 	if err != nil {
-		telemetry.RecordError(Version, "run", telemetry.ClassifyError(err))
-		telemetry.Wait(4 * time.Second)
+		telemetry.RecordError(Version, "run", "", telemetry.ClassifyError(err))
 		return fmt.Errorf("failed to create test runner: %w", err)
 	}
 
@@ -423,8 +423,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		os.Stdout.Sync()
 	}
 
-	// Wait for telemetry to flush before exit
-	telemetry.Wait(4 * time.Second)
+
 
 	// Determine exit code based on test results:
 	//   exit 2 = infrastructure errors (service startup, healthcheck, setup, Docker failures)
@@ -503,7 +502,7 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 
 	// Health check
 	if err := client.HealthCheck(); err != nil {
-		telemetry.RecordError(Version, "run", telemetry.ClassifyError(err))
+		telemetry.RecordError(Version, "run", "", telemetry.ClassifyError(err))
 		return fmt.Errorf("cloud API not reachable at %s: %w\n\nHint: run without --cloud for local execution", apiURL, err)
 	}
 
@@ -526,7 +525,7 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 	// Build submission with resolved service templates
 	submission, err := cloud.BuildSubmission(tests, services, Version, projectID)
 	if err != nil {
-		telemetry.RecordError(Version, "run", telemetry.ClassifyError(err))
+		telemetry.RecordError(Version, "run", "", telemetry.ClassifyError(err))
 		return fmt.Errorf("failed to build submission: %w", err)
 	}
 
@@ -538,7 +537,7 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 	// Create run
 	resp, err := client.CreateRun(submission)
 	if err != nil {
-		telemetry.RecordError(Version, "run", telemetry.ClassifyError(err))
+		telemetry.RecordError(Version, "run", "", telemetry.ClassifyError(err))
 		return fmt.Errorf("failed to create run: %w", err)
 	}
 
@@ -589,7 +588,7 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 	// Stream results — events go through the bus to all registered reporters
 	result, err := client.StreamRun(ctx, resp.ID, bus)
 	if err != nil {
-		telemetry.RecordError(Version, "run", telemetry.ClassifyError(err))
+		telemetry.RecordError(Version, "run", "", telemetry.ClassifyError(err))
 		if ctx.Err() != nil {
 			return exitErrorf(ExitCancelled, "run cancelled")
 		}

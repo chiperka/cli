@@ -16,6 +16,8 @@ import (
 	"chiperka-cli/internal/model"
 	"chiperka-cli/internal/parser"
 	"chiperka-cli/internal/runner"
+	"chiperka-cli/internal/telemetry"
+	"time"
 )
 
 // --- Tool definitions ---
@@ -547,7 +549,25 @@ func handleRun(version string) func(ctx context.Context, request mcp.CallToolReq
 			return nil, fmt.Errorf("failed to create test runner: %w", err)
 		}
 
+		startTime := time.Now()
 		runResult := r.Run(ctx, tests)
+
+		// Record telemetry with MCP source
+		runStats := telemetry.CollectRunStats(tests, services)
+		telemetry.RecordRun(telemetry.RunParams{
+			Version:          version,
+			Source:           "mcp",
+			DurationMs:       time.Since(startTime).Milliseconds(),
+			WorkerCount:      workerCount,
+			ExecutorType:     runStats.ExecutorType,
+			ServiceCount:     runStats.ServiceCount,
+			Snapshots:        runStats.HasSnapshots,
+			HasSetup:         runStats.HasSetup,
+			HasTeardown:      runStats.HasTeardown,
+			HasHooks:         runStats.HasHooks,
+			ServiceTemplates: runStats.HasServiceTemplates,
+		}, runResult.TotalTests(), runResult.TotalPassed(), runResult.TotalFailed(), runResult.TotalSkipped(), len(tests.Suites))
+		telemetry.Wait(2 * time.Second)
 
 		type assertionJSON struct {
 			Assertion string `json:"assertion"`
@@ -773,7 +793,25 @@ func handleExecute(version string) func(ctx context.Context, request mcp.CallToo
 			return nil, fmt.Errorf("failed to create test runner: %w", err)
 		}
 
+		execStartTime := time.Now()
 		runResult := r.Run(ctx, tests)
+
+		// Record telemetry with MCP source
+		execRunStats := telemetry.CollectRunStats(tests, services)
+		telemetry.RecordRun(telemetry.RunParams{
+			Version:          version,
+			Source:           "mcp",
+			DurationMs:       time.Since(execStartTime).Milliseconds(),
+			WorkerCount:      workerCount,
+			ExecutorType:     execRunStats.ExecutorType,
+			ServiceCount:     execRunStats.ServiceCount,
+			Snapshots:        execRunStats.HasSnapshots,
+			HasSetup:         execRunStats.HasSetup,
+			HasTeardown:      execRunStats.HasTeardown,
+			HasHooks:         execRunStats.HasHooks,
+			ServiceTemplates: execRunStats.HasServiceTemplates,
+		}, runResult.TotalTests(), runResult.TotalPassed(), runResult.TotalFailed(), runResult.TotalSkipped(), len(tests.Suites))
+		telemetry.Wait(2 * time.Second)
 
 		// Always return full exchange details (the point is to see what comes back)
 		type httpExchangeJSON struct {
