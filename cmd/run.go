@@ -553,10 +553,12 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		return fmt.Errorf("failed to create run: %w", err)
 	}
 
+	runURL := fmt.Sprintf("%s/runs/%s", strings.TrimSuffix(apiURL, "/"), resp.ID)
 	emitter.Info(events.Fields{
 		"action": "cloud_run_created",
 		"run_id": resp.ID,
-		"msg":    fmt.Sprintf("Run created: %s", resp.ID),
+		"url":    runURL,
+		"msg":    fmt.Sprintf("Run created: %s", runURL),
 	})
 
 	// Collect and upload snapshot files
@@ -661,10 +663,7 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		Debug:            debugOutput,
 	}, total, cloudResult.Passed, cloudResult.Failed, cloudResult.Skipped, len(tests.Suites))
 
-	// Print cloud run UUID for progressive disclosure
-	cloudRunUUID := result.CloudRunUUID(resp.ID)
 	fmt.Printf("\n  %s/runs/%s\n", strings.TrimSuffix(apiURL, "/"), resp.ID)
-	fmt.Printf("  Results: chiperka result run %s\n", cloudRunUUID)
 
 	if cloudResult.Cancelled {
 		return exitErrorf(ExitCancelled, "run cancelled")

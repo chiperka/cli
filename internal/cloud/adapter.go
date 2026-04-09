@@ -17,6 +17,7 @@ type SSEAdapter struct {
 	suiteName    map[int64]string // test ID → suite name
 	finishedTest map[int64]bool   // test IDs that already emitted a terminal event
 	startTime    time.Time
+	started      bool // true after first RunStarted emission
 }
 
 // NewSSEAdapter creates an adapter that translates SSE events into event bus emissions.
@@ -70,13 +71,21 @@ func (a *SSEAdapter) handleSnapshot(data json.RawMessage) (*RunResult, bool) {
 		}
 	}
 
-	a.bus.Emit(events.NewEvent(events.RunStarted).
-		WithDetail("tests", totalTests).
-		WithDetail("suites", suiteCount))
+	// Only emit RunStarted on first snapshot (reconnects send snapshot again)
+	if !a.started {
+		a.started = true
+		a.bus.Emit(events.NewEvent(events.RunStarted).
+			WithDetail("tests", totalTests).
+			WithDetail("suites", suiteCount))
+	}
 
-	// Emit events for tests that already have a terminal status in the snapshot
+	// Emit events for tests that already have a terminal status in the snapshot,
+	// but skip tests we've already processed (from before reconnect)
 	for _, suite := range snap.Suites {
 		for _, test := range suite.Tests {
+			if a.finishedTest[test.ID] {
+				continue
+			}
 			switch test.Status {
 			case "running":
 				te := events.NewTestEvent(events.TestStarted, suite.Name, test.Name)
