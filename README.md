@@ -66,7 +66,7 @@ Requires Docker for local use.
 - **Parallel by default** — tests run concurrently out of the box
 - **HTML & JUnit reports** — `--html report.html` / `--junit report.xml`
 - **Snapshot testing** — compare responses against saved snapshots
-- **Cloud mode** — run tests remotely with `--cloud`, no local Docker needed
+- **Cloud mode** — run tests remotely with `--cloud`, no local Docker needed ([create account](https://chiperka.com))
 
 ## Quick start
 
@@ -81,29 +81,9 @@ chiperka run ./tests
 chiperka run ./tests --html report.html
 ```
 
-## CI/CD
-
-```yaml
-# .gitlab-ci.yml
-test:
-  image: finie/chiperka:latest
-  services:
-    - docker:dind
-  script:
-    - chiperka run ./tests --junit report.xml
-  artifacts:
-    reports:
-      junit: report.xml
-```
-
-## JetBrains Plugin
-
-Run `.chiperka` tests directly from PhpStorm, IntelliJ IDEA, WebStorm, GoLand, and other JetBrains IDEs — gutter play buttons, Test Runner integration, and schema validation.
-
-[Install from JetBrains Marketplace](https://plugins.jetbrains.com/plugin/30418-chiperka-test-runner) · [Plugin docs](https://about.chiperka.com/ide-plugin)
-
 ## Links
 
 - [Documentation](https://about.chiperka.com/getting-started)
 - [Website](https://about.chiperka.com)
 - [Cloud App](https://chiperka.com)
+- [JetBrains Plugin](https://plugins.jetbrains.com/plugin/30418-chiperka-test-runner)
