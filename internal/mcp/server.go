@@ -19,6 +19,10 @@ func Run(version, contextText, configFile string) error {
 	s.AddTool(validateTool(), handleValidate)
 	s.AddTool(executeTool(), handleExecute(version))
 	s.AddTool(runTool(), handleRun(version))
+	s.AddTool(readResultRunsTool(), handleReadRuns)
+	s.AddTool(readRunTool(), handleReadRun)
+	s.AddTool(readTestTool(), handleReadTest)
+	s.AddTool(readArtifactTool(), handleReadArtifact)
 
 	return server.ServeStdio(s)
 }

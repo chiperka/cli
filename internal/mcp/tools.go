@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"chiperka-cli/internal/config"
 	"chiperka-cli/internal/events"
+	"chiperka-cli/internal/result"
 	"chiperka-cli/internal/events/subscribers"
 	"chiperka-cli/internal/finder"
 	"chiperka-cli/internal/model"
@@ -554,7 +556,12 @@ func handleRun(version string) func(ctx context.Context, request mcp.CallToolReq
 			}
 		}
 
-		r, err := runner.New(bus, workerCount, os.TempDir(), services, regenerateSnapshots, timeout, version, collector, 0, cfg.ExecutionVariables)
+		// Generate run UUID upfront so artifacts are written directly into the result tree
+		runUUID := result.NewRunUUID()
+		runDir := filepath.Join(".chiperka", "results", "runs", runUUID)
+		os.MkdirAll(runDir, 0755)
+
+		r, err := runner.New(bus, workerCount, runDir, services, regenerateSnapshots, timeout, version, collector, 0, cfg.ExecutionVariables)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create test runner: %w", err)
 		}
@@ -579,180 +586,20 @@ func handleRun(version string) func(ctx context.Context, request mcp.CallToolReq
 		}, runResult.TotalTests(), runResult.TotalPassed(), runResult.TotalFailed(), runResult.TotalSkipped(), len(tests.Suites))
 		telemetry.Wait(2 * time.Second)
 
-		type assertionJSON struct {
-			Assertion string `json:"assertion"`
-			Status    string `json:"status"`
-			Expected  string `json:"expected,omitempty"`
-			Actual    string `json:"actual,omitempty"`
-		}
-		type httpExchangeJSON struct {
-			Phase      string `json:"phase"`
-			Method     string `json:"method"`
-			URL        string `json:"url"`
-			StatusCode int    `json:"status_code"`
-			Body       string `json:"response_body,omitempty"`
-			DurationMs int64  `json:"duration_ms"`
-			Error      string `json:"error,omitempty"`
-		}
-		type cliExecJSON struct {
-			Phase      string `json:"phase"`
-			Service    string `json:"service"`
-			Command    string `json:"command"`
-			ExitCode   int    `json:"exit_code"`
-			Stdout     string `json:"stdout,omitempty"`
-			Stderr     string `json:"stderr,omitempty"`
-			DurationMs int64  `json:"duration_ms"`
-			Error      string `json:"error,omitempty"`
-		}
-		type serviceLogJSON struct {
-			Name     string `json:"name"`
-			Image    string `json:"image"`
-			DurationMs int64 `json:"duration_ms"`
-		}
-		type testResultJSON struct {
-			Suite         string             `json:"suite"`
-			Test          string             `json:"test"`
-			Status        string             `json:"status"`
-			DurationMs    int64              `json:"duration_ms"`
-			Assertions    []assertionJSON    `json:"assertions"`
-			Error         string             `json:"error,omitempty"`
-			HTTPExchanges []httpExchangeJSON `json:"http_exchanges,omitempty"`
-			CLIExecutions []cliExecJSON      `json:"cli_executions,omitempty"`
-			Services      []serviceLogJSON   `json:"services,omitempty"`
-			Logs          []string           `json:"logs,omitempty"`
-		}
-		type runResultJSON struct {
-			Status     string           `json:"status"`
-			Passed     int              `json:"passed"`
-			Failed     int              `json:"failed"`
-			Errored    int              `json:"errored"`
-			DurationMs int64            `json:"duration_ms"`
-			Results    []testResultJSON `json:"results"`
+		// Persist results — artifacts are already in runDir
+		rw := result.NewWriter(".chiperka/results/runs")
+		if err := rw.Persist(runUUID, runResult, startTime); err != nil {
+			return nil, fmt.Errorf("failed to persist results: %w", err)
 		}
 
-		result := runResultJSON{
-			Status:  "passed",
-			Passed:  runResult.TotalPassed(),
-			Failed:  runResult.TotalFailed(),
-			Errored: runResult.TotalErrors(),
+		// Return the persisted run summary — same as run.json
+		store := result.DefaultLocalStore()
+		run, err := store.GetRun(runUUID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read persisted run: %w", err)
 		}
 
-		if runResult.HasFailures() {
-			result.Status = "failed"
-		}
-
-		var totalDuration int64
-		for _, sr := range runResult.SuiteResults {
-			for _, tr := range sr.TestResults {
-				durationMs := tr.Duration.Milliseconds()
-				totalDuration += durationMs
-				trJSON := testResultJSON{
-					Suite:      sr.Suite.Name,
-					Test:       tr.Test.Name,
-					Status:     string(tr.Status),
-					DurationMs: durationMs,
-				}
-
-				// Assertions
-				for _, ar := range tr.AssertionResults {
-					status := "pass"
-					if !ar.Passed {
-						status = "fail"
-					}
-					a := assertionJSON{
-						Assertion: ar.Message,
-						Status:    status,
-					}
-					if !ar.Passed {
-						a.Expected = ar.Expected
-						a.Actual = ar.Actual
-					}
-					trJSON.Assertions = append(trJSON.Assertions, a)
-				}
-
-				if tr.Error != nil {
-					trJSON.Error = tr.Error.Error()
-				}
-
-				// For non-passed tests, include detailed debug info
-				if tr.Status != model.StatusPassed {
-					// HTTP exchanges (request/response details)
-					for _, ex := range tr.HTTPExchanges {
-						he := httpExchangeJSON{
-							Phase:      ex.Phase,
-							Method:     ex.RequestMethod,
-							URL:        ex.RequestURL,
-							StatusCode: ex.ResponseStatusCode,
-							DurationMs: ex.Duration.Milliseconds(),
-						}
-						// Include response body for debugging (truncate if huge)
-						body := ex.ResponseBody
-						if len(body) > 4096 {
-							body = body[:4096] + "\n... (truncated)"
-						}
-						if body != "" {
-							he.Body = body
-						}
-						if ex.Error != nil {
-							he.Error = ex.Error.Error()
-						}
-						trJSON.HTTPExchanges = append(trJSON.HTTPExchanges, he)
-					}
-
-					// CLI executions
-					for _, ce := range tr.CLIExecutions {
-						cl := cliExecJSON{
-							Phase:      ce.Phase,
-							Service:    ce.Service,
-							Command:    ce.Command,
-							ExitCode:   ce.ExitCode,
-							DurationMs: ce.Duration.Milliseconds(),
-						}
-						stdout := ce.Stdout
-						if len(stdout) > 4096 {
-							stdout = stdout[:4096] + "\n... (truncated)"
-						}
-						if stdout != "" {
-							cl.Stdout = stdout
-						}
-						stderr := ce.Stderr
-						if len(stderr) > 4096 {
-							stderr = stderr[:4096] + "\n... (truncated)"
-						}
-						if stderr != "" {
-							cl.Stderr = stderr
-						}
-						if ce.Error != nil {
-							cl.Error = ce.Error.Error()
-						}
-						trJSON.CLIExecutions = append(trJSON.CLIExecutions, cl)
-					}
-
-					// Service info
-					for _, svc := range tr.ServiceResults {
-						trJSON.Services = append(trJSON.Services, serviceLogJSON{
-							Name:       svc.Name,
-							Image:      svc.Image,
-							DurationMs: svc.Duration.Milliseconds(),
-						})
-					}
-
-					// Log entries (compact format)
-					for _, log := range tr.LogEntries {
-						entry := fmt.Sprintf("[%s] %s", log.Level, log.Message)
-						if log.Service != "" {
-							entry = fmt.Sprintf("[%s] %s: %s", log.Level, log.Service, log.Message)
-						}
-						trJSON.Logs = append(trJSON.Logs, entry)
-					}
-				}
-
-				result.Results = append(result.Results, trJSON)
-			}
-		}
-		result.DurationMs = totalDuration
-
-		return jsonResult(result)
+		return jsonResult(run)
 	}
 }
 

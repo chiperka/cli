@@ -58,6 +58,24 @@ Key flags:
 ### chiperka context
 Print this AI-readable tool reference.
 
+### chiperka result runs
+List recent test runs with summary (UUID, status, pass/fail counts).
+  --limit N           Maximum runs to show (default 20)
+  --json              JSON output
+
+### chiperka result run <run-uuid>
+Show run summary with test list. Each test has a UUID for drill-down.
+  --last              Show most recent run
+  --json              JSON output
+
+### chiperka result test <test-uuid>
+Show full test detail: assertions, HTTP exchanges, CLI executions, services, artifacts.
+Available artifact names are listed in the test detail output.
+  --json              JSON output
+
+### chiperka result artifact <test-uuid> <filename>
+Output raw artifact content to stdout (response bodies, logs, etc.).
+
 ## Test file format (.chiperka)
 
 ` + "```" + `yaml
@@ -154,5 +172,28 @@ NDJSON — one JSON object per line:
 
 ### chiperka mcp
 Start MCP server for AI tool integration (JSON-RPC over stdio).
-Tools: chiperka_context, chiperka_list, chiperka_validate, chiperka_run.
-Configure in .mcp.json for Claude Code or claude_desktop_config.json for Claude Desktop.`
+Configure in .mcp.json for Claude Code or claude_desktop_config.json for Claude Desktop.
+
+MCP tools:
+  chiperka_context      - AI reference documentation
+  chiperka_list         - Discover tests and service templates
+  chiperka_read         - Read and parse test files as JSON
+  chiperka_validate     - Validate without executing
+  chiperka_execute      - Run inline YAML test
+  chiperka_run          - Execute tests, returns run UUID + summary
+  chiperka_read_runs    - List recent test runs
+  chiperka_read_run     - Read run summary with test UUIDs
+  chiperka_read_test    - Read test detail with artifact names
+  chiperka_read_artifact - Read raw artifact content by test UUID + filename
+
+## Progressive result disclosure
+
+After chiperka_run, results are stored hierarchically. Instead of reading everything
+at once, drill down only where needed:
+
+1. chiperka_run → run UUID + pass/fail summary
+2. chiperka_read_run(uuid) → test list with statuses + UUIDs
+3. chiperka_read_test(uuid) → assertions, HTTP exchanges, artifact names
+4. chiperka_read_artifact(test_uuid, name) → raw response body, logs, etc.
+
+Run UUID prefixes: lr- (local run), cr- (cloud run).`

@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"chiperka-cli/internal/cloud"
 	"chiperka-cli/internal/config"
+	"chiperka-cli/internal/result"
 	"chiperka-cli/internal/events"
 	"chiperka-cli/internal/events/subscribers"
 	"chiperka-cli/internal/finder"
@@ -28,7 +29,6 @@ import (
 
 var junitOutput string
 var htmlOutput string
-var artifactsDir string
 var regenerateSnapshots bool
 var filterTags []string
 var filterName string
@@ -94,7 +94,6 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 	runCmd.Flags().StringVar(&junitOutput, "junit", "", "Write JUnit XML report to file")
 	runCmd.Flags().StringVar(&htmlOutput, "html", "", "Write HTML reports to directory")
-	runCmd.Flags().StringVar(&artifactsDir, "artifacts", "./artifacts", "Directory for test artifacts")
 	runCmd.Flags().BoolVar(&regenerateSnapshots, "regenerate-snapshots", false, "Update snapshot files instead of comparing them")
 	runCmd.Flags().StringSliceVar(&filterTags, "tags", nil, "Run only tests with specified tags (comma-separated or multiple flags)")
 	runCmd.Flags().StringVar(&filterName, "filter", "", "Run only tests whose name matches the pattern (supports * wildcard)")
@@ -179,7 +178,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Set up output based on flags
 	if teamcityOutput {
 		// TeamCity mode: output service messages for IDE test runner
-		tc := subscribers.NewTeamCityReporter(os.Stdout, artifactsDir, pathMapping, htmlOutput)
+		tc := subscribers.NewTeamCityReporter(os.Stdout, "", pathMapping, htmlOutput)
 		tc.Register(bus)
 	} else if jsonOutput {
 		// JSON mode: NDJSON output for machine consumption
@@ -274,11 +273,6 @@ func runTests(cmd *cobra.Command, args []string) error {
 			fmt.Fprintln(os.Stderr, "Error: cloud URL not configured. Set 'cloud.url' in chiperka.yaml or CHIPERKA_CLOUD_URL environment variable.")
 			os.Exit(1)
 		}
-		// Only download artifacts if --artifacts was explicitly set
-		cloudArtifactsDir := ""
-		if cmd.Flags().Changed("artifacts") {
-			cloudArtifactsDir = artifactsDir
-		}
 		// Resolve project slug: --project flag > CHIPERKA_PROJECT env > chiperka.yaml cloud.project
 		projectSlug := cloudProject
 		if projectSlug == "" {
@@ -287,7 +281,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		if projectSlug == "" {
 			projectSlug = cfg.Cloud.Project
 		}
-		err := runTestsCloud(cloudURL, tests, services, startTime, bus, emitter, cloudArtifactsDir, projectSlug)
+		err := runTestsCloud(cloudURL, tests, services, startTime, bus, emitter, projectSlug)
 		return err // runTestsCloud already wraps with ExitError
 	}
 
@@ -332,8 +326,15 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}()
 	defer signal.Stop(sigCh)
 
-	// Run tests and output results
-	r, err := runner.New(bus, workerCount, artifactsDir, services, regenerateSnapshots, testTimeout, Version, collector, cpuThreshold, cfg.ExecutionVariables)
+	// Generate run UUID upfront so artifacts are written directly into the result tree
+	runUUID := result.NewRunUUID()
+	resultRunDir := filepath.Join(".chiperka", "results", "runs", runUUID)
+	if err := os.MkdirAll(resultRunDir, 0755); err != nil {
+		return fmt.Errorf("failed to create result directory: %w", err)
+	}
+
+	// Run tests and output results — artifacts go directly into the result tree
+	r, err := runner.New(bus, workerCount, resultRunDir, services, regenerateSnapshots, testTimeout, Version, collector, cpuThreshold, cfg.ExecutionVariables)
 	if err != nil {
 		telemetry.RecordError(Version, "run", "", telemetry.ClassifyError(err))
 		return fmt.Errorf("failed to create test runner: %w", err)
@@ -351,7 +352,19 @@ func runTests(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	result := r.Run(ctx, tests)
+	runResult := r.Run(ctx, tests)
+
+	// Persist results — artifacts are already in resultRunDir, writer adds JSON metadata
+	rw := result.NewWriter(".chiperka/results/runs")
+	if err := rw.Persist(runUUID, runResult, startTime); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to persist results: %v\n", err)
+	} else if !teamcityOutput && !jsonOutput {
+		emitter.Info(events.Fields{
+			"action": "result_stored",
+			"uuid":   runUUID,
+			"msg":    fmt.Sprintf("Results: chiperka result run %s", runUUID),
+		})
+	}
 
 	// Record telemetry
 	runStats := telemetry.CollectRunStats(tests, services)
@@ -363,7 +376,6 @@ func runTests(cmd *cobra.Command, args []string) error {
 		ServiceCount:     runStats.ServiceCount,
 		HTMLReport:       htmlOutput != "",
 		JUnitReport:      junitOutput != "",
-		Artifacts:        artifactsDir != "./artifacts",
 		TagsFilter:       len(filterTags) > 0,
 		NameFilter:       filterName != "",
 		Snapshots:        runStats.HasSnapshots,
@@ -373,7 +385,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 		ServiceTemplates: runStats.HasServiceTemplates,
 		Verbose:          verboseOutput,
 		Debug:            debugOutput,
-	}, result.TotalTests(), result.TotalPassed(), result.TotalFailed(), result.TotalSkipped(), len(tests.Suites))
+	}, runResult.TotalTests(), runResult.TotalPassed(), runResult.TotalFailed(), runResult.TotalSkipped(), len(tests.Suites))
 
 	// Get weblink prefix for CLI output (e.g., "http://localhost:8080/reports")
 	weblink := os.Getenv("CHIPERKA_WEBLINK")
@@ -383,7 +395,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 
 	// Write JUnit report if requested
 	if junitWriter != nil {
-		if err := junitWriter.Write(result, junitOutput); err != nil {
+		if err := junitWriter.Write(runResult, junitOutput); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to write JUnit report: %v\n", err)
 		} else {
 			fields := events.Fields{
@@ -400,7 +412,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 
 	// Write HTML dashboard (index.html with links to per-test reports)
 	if htmlWriter != nil {
-		if err := htmlWriter.WriteDashboard(result, htmlOutput, Version); err != nil {
+		if err := htmlWriter.WriteDashboard(runResult, htmlOutput, Version); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to write HTML dashboard: %v\n", err)
 		} else {
 			target := filepath.Join(htmlOutput, "index.html")
@@ -428,12 +440,12 @@ func runTests(cmd *cobra.Command, args []string) error {
 	// Determine exit code based on test results:
 	//   exit 2 = infrastructure errors (service startup, healthcheck, setup, Docker failures)
 	//   exit 1 = assertion failures (tests ran but assertions didn't pass)
-	if result.TotalErrors() > 0 {
+	if runResult.TotalErrors() > 0 {
 		return exitErrorf(ExitInfraError, "test run failed: %d test(s) errored, %d failed",
-			result.TotalErrors(), result.TotalFailed()-result.TotalErrors())
+			runResult.TotalErrors(), runResult.TotalFailed()-runResult.TotalErrors())
 	}
-	if result.HasFailures() {
-		return exitErrorf(ExitTestFailure, "test run failed: %d test(s) failed", result.TotalFailed())
+	if runResult.HasFailures() {
+		return exitErrorf(ExitTestFailure, "test run failed: %d test(s) failed", runResult.TotalFailed())
 	}
 
 	return nil
@@ -496,7 +508,7 @@ func resolveCloudToken(apiURL string) string {
 }
 
 // runTestsCloud uploads tests to a remote API server and streams results.
-func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.ServiceTemplateCollection, startTime time.Time, bus *events.Bus, emitter *events.Emitter, artifactsDir string, projectSlug string) error {
+func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.ServiceTemplateCollection, startTime time.Time, bus *events.Bus, emitter *events.Emitter, projectSlug string) error {
 	token := resolveCloudToken(apiURL)
 	client := cloud.NewClient(apiURL, token)
 
@@ -586,7 +598,7 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 	}()
 
 	// Stream results — events go through the bus to all registered reporters
-	result, err := client.StreamRun(ctx, resp.ID, bus)
+	cloudResult, err := client.StreamRun(ctx, resp.ID, bus)
 	if err != nil {
 		telemetry.RecordError(Version, "run", "", telemetry.ClassifyError(err))
 		if ctx.Err() != nil {
@@ -626,23 +638,8 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		}
 	}
 
-	// Download artifacts if requested
-	if artifactsDir != "" {
-		if err := os.MkdirAll(artifactsDir, 0o755); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to create artifacts directory: %v\n", err)
-		} else if err := client.DownloadArtifactsZip(resp.ID, artifactsDir); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to download artifacts: %v\n", err)
-		} else {
-			emitter.Info(events.Fields{
-				"action": "artifacts_download",
-				"target": artifactsDir,
-				"msg":    fmt.Sprintf("Artifacts downloaded to %s", artifactsDir),
-			})
-		}
-	}
-
 	// Record telemetry
-	total := result.Passed + result.Failed + result.Skipped
+	total := cloudResult.Passed + cloudResult.Failed + cloudResult.Skipped
 	cloudRunStats := telemetry.CollectRunStats(tests, services)
 	telemetry.RecordRun(telemetry.RunParams{
 		Version:          Version,
@@ -653,7 +650,6 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		ServiceCount:     cloudRunStats.ServiceCount,
 		HTMLReport:       htmlOutput != "",
 		JUnitReport:      junitOutput != "",
-		Artifacts:        artifactsDir != "",
 		TagsFilter:       len(filterTags) > 0,
 		NameFilter:       filterName != "",
 		Snapshots:        cloudRunStats.HasSnapshots,
@@ -663,17 +659,19 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		ServiceTemplates: cloudRunStats.HasServiceTemplates,
 		Verbose:          verboseOutput,
 		Debug:            debugOutput,
-	}, total, result.Passed, result.Failed, result.Skipped, len(tests.Suites))
+	}, total, cloudResult.Passed, cloudResult.Failed, cloudResult.Skipped, len(tests.Suites))
 
-	// Print link
+	// Print cloud run UUID for progressive disclosure
+	cloudRunUUID := result.CloudRunUUID(resp.ID)
 	fmt.Printf("\n  %s/runs/%s\n", strings.TrimSuffix(apiURL, "/"), resp.ID)
+	fmt.Printf("  Results: chiperka result run %s\n", cloudRunUUID)
 
-	if result.Cancelled {
+	if cloudResult.Cancelled {
 		return exitErrorf(ExitCancelled, "run cancelled")
 	}
 
-	if result.HasFailures() {
-		return exitErrorf(ExitTestFailure, "test run failed: %d test(s) failed", result.Failed)
+	if cloudResult.HasFailures() {
+		return exitErrorf(ExitTestFailure, "test run failed: %d test(s) failed", cloudResult.Failed)
 	}
 
 	return nil
