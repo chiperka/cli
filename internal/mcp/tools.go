@@ -149,18 +149,11 @@ func handleList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 	}
 	filter, _ := request.GetArguments()["filter"].(string)
 	tagsStr, _ := request.GetArguments()["tags"].(string)
-	configFile, _ := request.GetArguments()["configuration"].(string)
 
-	tests, err := discoverTests(path, parseTags(tagsStr), filter)
+	tests, services, err := discoverTests(path, parseTags(tagsStr), filter)
 	if err != nil {
 		return nil, err
 	}
-
-	cfg, err := loadConfig(configFile)
-	if err != nil {
-		return nil, err
-	}
-	services := cfg.ServiceTemplates()
 
 	type listTest struct {
 		Name     string   `json:"name"`
@@ -247,7 +240,7 @@ func handleRead(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 	filter, _ := request.GetArguments()["filter"].(string)
 	tagsStr, _ := request.GetArguments()["tags"].(string)
 
-	tests, err := discoverTests(path, parseTags(tagsStr), filter)
+	tests, _, err := discoverTests(path, parseTags(tagsStr), filter)
 	if err != nil {
 		return nil, err
 	}
@@ -409,13 +402,13 @@ func handleValidate(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 	filter, _ := request.GetArguments()["filter"].(string)
 	configFile, _ := request.GetArguments()["configuration"].(string)
 
-	cfg, err := loadConfig(configFile)
-	if err != nil {
+	// Surface chiperka.yaml legacy errors here even though we no longer
+	// consume services from it — keeps the validate tool honest.
+	if _, err := loadConfig(configFile); err != nil {
 		return nil, err
 	}
-	services := cfg.ServiceTemplates()
 
-	tests, err := discoverTests(path, nil, filter)
+	tests, services, err := discoverTests(path, nil, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -525,14 +518,18 @@ func handleRun(version string) func(ctx context.Context, request mcp.CallToolReq
 		if err != nil {
 			return nil, err
 		}
-		services := cfg.ServiceTemplates()
 
-		tests, err := discoverTests(path, nil, filter)
+		tests, services, err := discoverTests(path, nil, filter)
 		if err != nil {
 			return nil, err
 		}
 
 		if tests.TotalTests() == 0 {
+			if services.HasTemplates() {
+				return nil, fmt.Errorf(
+					"services are not runnable directly — reference them from a test (found %d service(s) and 0 tests at %s)",
+					len(services.Templates), path)
+			}
 			return jsonResult(map[string]interface{}{
 				"status":      "passed",
 				"passed":      0,
@@ -619,7 +616,10 @@ func handleExecute(version string) func(ctx context.Context, request mcp.CallToo
 		if err != nil {
 			return nil, err
 		}
-		services := cfg.ServiceTemplates()
+		services, err := discoverServices(".")
+		if err != nil {
+			return nil, err
+		}
 
 		// Parse inline YAML
 		p := parser.New()
@@ -831,11 +831,13 @@ func handleExecute(version string) func(ctx context.Context, request mcp.CallToo
 
 // --- Helpers ---
 
-// discoverTests finds and parses test files, applying filters.
-func discoverTests(path string, tags []string, filter string) (*model.TestCollection, error) {
+// discoverTests finds and parses .chiperka files at path, applying filters
+// to the test collection. Service-kind files at the same path contribute to
+// the returned ServiceTemplateCollection (filters do not apply to services).
+func discoverTests(path string, tags []string, filter string) (*model.TestCollection, *model.ServiceTemplateCollection, error) {
 	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		return nil, fmt.Errorf("path does not exist: %s", path)
+		return nil, nil, fmt.Errorf("path does not exist: %s", path)
 	}
 
 	var files []string
@@ -845,12 +847,12 @@ func discoverTests(path string, tags []string, filter string) (*model.TestCollec
 		f := finder.New(path)
 		files, err = f.FindTestFiles()
 		if err != nil {
-			return nil, fmt.Errorf("failed to find test files: %w", err)
+			return nil, nil, fmt.Errorf("failed to find files: %w", err)
 		}
 	}
 
 	if len(files) == 0 {
-		return model.NewTestCollection(), nil
+		return model.NewTestCollection(), model.NewServiceTemplateCollection(), nil
 	}
 
 	p := parser.New()
@@ -864,7 +866,23 @@ func discoverTests(path string, tags []string, filter string) (*model.TestCollec
 		tests = tests.FilterByName(filter)
 	}
 
-	return tests, nil
+	return tests, parseResult.Services, nil
+}
+
+// discoverServices walks dir for .chiperka files and returns the collected
+// service templates only. Used by handlers that operate on inline test YAML
+// and still need access to service references defined elsewhere in the project.
+func discoverServices(dir string) (*model.ServiceTemplateCollection, error) {
+	f := finder.New(dir)
+	files, err := f.FindTestFiles()
+	if err != nil {
+		return nil, fmt.Errorf("failed to find files: %w", err)
+	}
+	if len(files) == 0 {
+		return model.NewServiceTemplateCollection(), nil
+	}
+	p := parser.New()
+	return p.ParseAll(files).Services, nil
 }
 
 // loadConfig loads configuration. Priority: per-tool override > server default > auto-discover.

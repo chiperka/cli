@@ -102,12 +102,12 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	p := parser.New()
 	parseResult := p.ParseAll(files)
 
-	// Load configuration
-	cfg, err := loadValidateConfig()
-	if err != nil {
+	// Load configuration (executionVariables, cloud). Services come from
+	// .chiperka files of kind: service via the parser.
+	if _, err := loadValidateConfig(); err != nil {
 		return err
 	}
-	services := cfg.ServiceTemplates()
+	services := parseResult.Services
 
 	// Collect issues per file
 	var allIssues []validationIssue

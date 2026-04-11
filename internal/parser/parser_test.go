@@ -3,6 +3,7 @@ package parser
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -220,5 +221,140 @@ func TestParser_EnvVarExpansion_NonChiperkaPrefix(t *testing.T) {
 	}
 	if suite.Tests[0].Execution.Target != "$HOME/api" {
 		t.Errorf("expected $HOME not expanded, got %q", suite.Tests[0].Execution.Target)
+	}
+}
+
+// --- Kind dispatch ---
+
+func TestParser_ParseAll_ServiceKind(t *testing.T) {
+	p := New()
+	result := p.ParseAll([]string{testdataPath(t, "service-valid.chiperka")})
+	if len(result.Errors) != 0 {
+		t.Fatalf("unexpected errors: %v", result.Errors)
+	}
+	if result.Tests.TotalTests() != 0 {
+		t.Errorf("expected 0 tests, got %d", result.Tests.TotalTests())
+	}
+	tmpl := result.Services.GetTemplate("api")
+	if tmpl == nil {
+		t.Fatalf("expected service template 'api'")
+	}
+	if tmpl.Image != "ghcr.io/myorg/api:latest" {
+		t.Errorf("expected image, got %q", tmpl.Image)
+	}
+	if tmpl.Environment["DB_URL"] != "postgres://db:5432/test" {
+		t.Errorf("expected env DB_URL, got %q", tmpl.Environment["DB_URL"])
+	}
+	if tmpl.HealthCheck == nil || tmpl.HealthCheck.Retries != 30 {
+		t.Errorf("expected healthcheck retries=30, got %+v", tmpl.HealthCheck)
+	}
+	if tmpl.FilePath == "" {
+		t.Errorf("expected FilePath to be set")
+	}
+}
+
+func TestParser_ParseAll_ServiceMissingName(t *testing.T) {
+	p := New()
+	result := p.ParseAll([]string{testdataPath(t, "service-missing-name.chiperka")})
+	if len(result.Errors) != 1 {
+		t.Fatalf("expected 1 error, got %v", result.Errors)
+	}
+	if !strings.Contains(result.Errors[0].Error(), "name") {
+		t.Errorf("expected error to mention name, got: %v", result.Errors[0])
+	}
+	if result.Services.HasTemplates() {
+		t.Errorf("expected no templates added when name is missing")
+	}
+}
+
+func TestParser_ParseAll_UnknownKind(t *testing.T) {
+	p := New()
+	result := p.ParseAll([]string{testdataPath(t, "unknown-kind.chiperka")})
+	if len(result.Errors) != 1 {
+		t.Fatalf("expected 1 error, got %v", result.Errors)
+	}
+	if !strings.Contains(result.Errors[0].Error(), "fixture") {
+		t.Errorf("expected error to name the unknown kind, got: %v", result.Errors[0])
+	}
+}
+
+func TestParser_ParseAll_KindTestExplicit(t *testing.T) {
+	p := New()
+	result := p.ParseAll([]string{testdataPath(t, "test-explicit-kind.chiperka")})
+	if len(result.Errors) != 0 {
+		t.Fatalf("unexpected errors: %v", result.Errors)
+	}
+	if result.Tests.TotalTests() != 1 {
+		t.Errorf("expected 1 test, got %d", result.Tests.TotalTests())
+	}
+	if result.Services.HasTemplates() {
+		t.Errorf("expected no service templates")
+	}
+}
+
+func TestParser_ParseAll_KindDefaultsToTest(t *testing.T) {
+	// Existing valid-simple.spark has no `kind:` field — must still parse as test.
+	p := New()
+	result := p.ParseAll([]string{testdataPath(t, "valid-simple.spark")})
+	if len(result.Errors) != 0 {
+		t.Fatalf("unexpected errors: %v", result.Errors)
+	}
+	if result.Tests.TotalTests() != 1 {
+		t.Errorf("expected 1 test (default kind), got %d", result.Tests.TotalTests())
+	}
+}
+
+func TestParser_ParseAll_DuplicateServiceName(t *testing.T) {
+	p := New()
+	result := p.ParseAll([]string{
+		testdataPath(t, "service-valid.chiperka"),
+		testdataPath(t, "service-duplicate.chiperka"),
+	})
+	if len(result.Errors) != 1 {
+		t.Fatalf("expected 1 duplicate error, got %v", result.Errors)
+	}
+	if !strings.Contains(result.Errors[0].Error(), "duplicate") {
+		t.Errorf("expected duplicate error, got: %v", result.Errors[0])
+	}
+	// First one wins
+	tmpl := result.Services.GetTemplate("api")
+	if tmpl == nil || tmpl.Image != "ghcr.io/myorg/api:latest" {
+		t.Errorf("expected first service to win, got %+v", tmpl)
+	}
+}
+
+func TestParser_ParseAll_MixedKinds(t *testing.T) {
+	p := New()
+	result := p.ParseAll([]string{
+		testdataPath(t, "service-valid.chiperka"),
+		testdataPath(t, "service-postgres.chiperka"),
+		testdataPath(t, "test-explicit-kind.chiperka"),
+	})
+	if len(result.Errors) != 0 {
+		t.Fatalf("unexpected errors: %v", result.Errors)
+	}
+	if result.Tests.TotalTests() != 1 {
+		t.Errorf("expected 1 test, got %d", result.Tests.TotalTests())
+	}
+	if !result.Services.HasTemplates() || len(result.Services.Templates) != 2 {
+		t.Errorf("expected 2 service templates, got %d", len(result.Services.Templates))
+	}
+}
+
+// --- ParseFile rejects non-test kinds ---
+
+func TestParser_ParseFile_RejectsServiceKind(t *testing.T) {
+	p := New()
+	_, err := p.ParseFile(testdataPath(t, "service-valid.chiperka"))
+	if err == nil {
+		t.Fatalf("expected error: ParseFile should reject kind: service")
+	}
+}
+
+func TestParser_ParseBytes_RejectsServiceKind(t *testing.T) {
+	p := New()
+	_, err := p.ParseBytes([]byte("kind: service\nname: api\nimage: nginx"))
+	if err == nil {
+		t.Fatalf("expected error: ParseBytes should reject kind: service")
 	}
 }

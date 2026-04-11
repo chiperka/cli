@@ -1,4 +1,10 @@
 // Package config handles loading of chiperka.yaml configuration files.
+//
+// chiperka.yaml is the optional CLI configuration file (typically at
+// .chiperka/chiperka.yaml). It holds settings that apply across runs:
+// execution variables, cloud configuration, etc. Service templates do not
+// live here — they are declared as standalone .chiperka files with
+// `kind: service`.
 package config
 
 import (
@@ -8,7 +14,6 @@ import (
 	"regexp"
 
 	"gopkg.in/yaml.v3"
-	"chiperka-cli/internal/model"
 )
 
 // envVarPattern matches environment variables with $CHIPERKA_ prefix.
@@ -22,18 +27,6 @@ func expandEnvVars(data []byte) []byte {
 	})
 }
 
-// ServiceConfig defines a service in the configuration file.
-type ServiceConfig struct {
-	Image        string                  `yaml:"image,omitempty"`
-	Command      model.ShellCommand      `yaml:"command,omitempty"`
-	WorkingDir   string                  `yaml:"workingDir,omitempty"`
-	Environment  map[string]string       `yaml:"environment,omitempty"`
-	HealthCheck  *model.HealthCheck      `yaml:"healthcheck,omitempty"`
-	Artifacts    []model.ServiceArtifact `yaml:"artifacts,omitempty"`
-	MaxInstances int                     `yaml:"maxInstances,omitempty"`
-	Hooks        []model.Hook            `yaml:"hooks,omitempty"`
-}
-
 // CloudConfig defines cloud-related configuration in chiperka.yaml.
 type CloudConfig struct {
 	URL     string `yaml:"url,omitempty"`
@@ -42,12 +35,12 @@ type CloudConfig struct {
 
 // Config represents the contents of a chiperka.yaml configuration file.
 type Config struct {
-	Services           map[string]ServiceConfig `yaml:"services"`
-	ExecutionVariables map[string]string        `yaml:"executionVariables"`
-	Cloud              CloudConfig              `yaml:"cloud,omitempty"`
+	ExecutionVariables map[string]string `yaml:"executionVariables"`
+	Cloud              CloudConfig       `yaml:"cloud,omitempty"`
 }
 
 // Load reads a configuration file from the given path.
+//
 // Returns an error if the file cannot be read or parsed.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -67,6 +60,9 @@ func Load(path string) (*Config, error) {
 
 // Discover looks for .chiperka/chiperka.yaml or .chiperka/chiperka.yml in the current working directory.
 // Returns the config and true if found, or an empty config and false if not found.
+//
+// If the file is found but fails to load, Discover returns an empty config
+// and false. Callers that need the load error should call Load directly.
 func Discover() (*Config, bool) {
 	for _, name := range []string{
 		filepath.Join(".chiperka", "chiperka.yaml"),
@@ -81,30 +77,4 @@ func Discover() (*Config, bool) {
 		}
 	}
 	return &Config{}, false
-}
-
-// ServiceTemplates converts the config's services into a ServiceTemplateCollection
-// compatible with the existing runner and cloud packages.
-func (c *Config) ServiceTemplates() *model.ServiceTemplateCollection {
-	collection := model.NewServiceTemplateCollection()
-	if c == nil || c.Services == nil {
-		return collection
-	}
-
-	for name, svc := range c.Services {
-		template := &model.ServiceTemplate{
-			Name:         name,
-			Image:        svc.Image,
-			Command:      svc.Command,
-			WorkingDir:   svc.WorkingDir,
-			Environment:  svc.Environment,
-			HealthCheck:  svc.HealthCheck,
-			Artifacts:    svc.Artifacts,
-			MaxInstances: svc.MaxInstances,
-			Hooks:        svc.Hooks,
-		}
-		collection.AddTemplate(template)
-	}
-
-	return collection
 }

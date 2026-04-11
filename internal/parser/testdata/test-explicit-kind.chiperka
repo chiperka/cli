@@ -1,0 +1,12 @@
+kind: test
+name: explicit-kind-suite
+tests:
+  - name: simple
+    execution:
+      target: http://api:8080
+      request:
+        method: GET
+        url: /health
+    assertions:
+      - response:
+          statusCode: 200

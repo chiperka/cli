@@ -1,0 +1,2 @@
+kind: service
+image: redis:7

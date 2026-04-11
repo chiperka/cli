@@ -1,0 +1,9 @@
+kind: service
+name: postgres
+image: postgres:16
+environment:
+  POSTGRES_DB: test
+  POSTGRES_PASSWORD: test
+healthcheck:
+  test: "pg_isready -U postgres"
+  retries: 20

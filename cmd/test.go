@@ -155,12 +155,23 @@ func runTests(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
 
+	// Service-kind files are not runnable directly. If the user pointed at a
+	// path that contains only service definitions (no tests), surface a clear
+	// error instead of silently doing nothing.
+	if parseResult.Tests.TotalTests() == 0 && parseResult.Services.HasTemplates() {
+		return exitErrorf(ExitValidationError,
+			"services are not runnable directly — reference them from a test (found %d service(s) and 0 tests at %s)",
+			len(parseResult.Services.Templates), searchPath)
+	}
+
 	// Load configuration file
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
-	services := cfg.ServiceTemplates()
+	// Service templates now come from .chiperka files of kind: service
+	// discovered alongside test files. chiperka.yaml no longer holds them.
+	services := parseResult.Services
 
 	// Show telemetry notice on first run
 	telemetry.ShowNoticeIfNeeded(teamcityOutput || jsonOutput)

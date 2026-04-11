@@ -10,6 +10,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Kind values for the top-level discriminator in .chiperka files.
+//
+// A .chiperka file with no `kind:` field is treated as KindTest for backward
+// compatibility with the original test-suite-only format.
+const (
+	KindTest    = "test"
+	KindService = "service"
+)
+
 // ShellCommand is a []string that can be unmarshaled from either a YAML string or a list.
 // When given a string, it splits using shell-like tokenization (respects single/double quotes).
 // This matches Docker Compose behavior where command accepts both forms.
@@ -404,9 +413,14 @@ type Service struct {
 }
 
 // ServiceTemplate defines a reusable service configuration.
+//
+// Service templates are loaded from .chiperka files with `kind: service` at the
+// top level. Each file declares one template with flat top-level fields. They
+// used to live in `.chiperka/chiperka.yaml` under the `services:` map; that
+// shape is no longer supported — see `chiperka migrate`.
 type ServiceTemplate struct {
-	// Type must be "service" for service templates
-	Type string `yaml:"type"`
+	// Kind discriminator. Must be "service" when loaded from a .chiperka file.
+	Kind string `yaml:"kind"`
 	// Name is the unique identifier for this template
 	Name string `yaml:"name"`
 	// Image is the Docker image to use
@@ -641,8 +655,14 @@ func (t *Test) CollectHooks(slot string) []Hook {
 	return hooks
 }
 
-// Suite represents a collection of tests from a single chiperka.yaml file.
+// Suite represents a collection of tests from a single .chiperka file.
+//
+// A .chiperka file with no top-level `kind:` field, or with `kind: test`, is
+// parsed as a Suite. Other kinds (notably `kind: service`) are dispatched to
+// other types by the parser.
 type Suite struct {
+	// Kind discriminator. Optional. Empty or "test" means this file is a test suite.
+	Kind  string `yaml:"kind,omitempty" json:"kind,omitempty"`
 	Name  string `yaml:"name" json:"name"`
 	Tests []Test `yaml:"tests" json:"tests"`
 	// FilePath stores the source file path (not from YAML, set by parser).

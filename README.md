@@ -59,7 +59,7 @@ tests:
 
 A real project usually has many such files — `auth.chiperka`, `users.chiperka`, `billing.chiperka`, one per area. The whole corpus is your specification. Chiperka discovers them automatically by walking the repo.
 
-You can also drop a small `.chiperka/chiperka.yaml` in the repo root for **shared configuration** — services that multiple scenarios reuse, execution variables, etc. It's optional. The `.chiperka` files are the standard; `chiperka.yaml` just helps you avoid repetition.
+You can also drop a small `.chiperka/chiperka.yaml` in the repo root for **CLI configuration** — execution variables and similar cross-run settings. It's optional, and it does not declare any project resources. Services and tests both live in `.chiperka` files; `chiperka.yaml` is just for the runner.
 
 ---
 
