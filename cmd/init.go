@@ -18,7 +18,8 @@ var initCmd = &cobra.Command{
 	Long: `Init scaffolds a starter Chiperka project in the current directory.
 
 It creates:
-  - .chiperka/chiperka.yaml  Configuration with an example service template
+  - .chiperka/chiperka.yaml  Configuration with discovery paths
+  - services/api.chiperka    Example service template
   - tests/health.chiperka    Health check test (1 test case)
   - tests/api.chiperka       API tests (2 test cases)
 
@@ -27,7 +28,7 @@ If .chiperka/chiperka.yaml already exists, init exits without modifying anything
 Example:
   mkdir my-project && cd my-project
   chiperka init
-  chiperka test tests`,
+  chiperka test`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE:         runInit,
@@ -37,12 +38,17 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 }
 
-const chiperkaYAMLContent = `services:
-  api:
-    image: nginx:alpine
-    healthcheck:
-      test: "wget -q --spider http://localhost:80/"
-      retries: 30
+const chiperkaYAMLContent = `discovery:
+  - ./tests
+  - ./services
+`
+
+const apiServiceContent = `kind: service
+name: api
+image: nginx:alpine
+healthcheck:
+  test: "wget -q --spider http://localhost:80/"
+  retries: 30
 `
 
 const healthChiperkaContent = `name: Health checks
@@ -115,6 +121,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err := os.MkdirAll("tests", 0755); err != nil {
 		return fmt.Errorf("failed to create tests directory: %w", err)
 	}
+	if err := os.MkdirAll("services", 0755); err != nil {
+		return fmt.Errorf("failed to create services directory: %w", err)
+	}
 
 	// Write .chiperka/chiperka.yaml
 	if err := os.WriteFile(configPath, []byte(chiperkaYAMLContent), 0644); err != nil {
@@ -129,6 +138,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Write tests/api.chiperka
 	if err := os.WriteFile(filepath.Join("tests", "api.chiperka"), []byte(apiChiperkaContent), 0644); err != nil {
 		return fmt.Errorf("failed to write tests/api.chiperka: %w", err)
+	}
+
+	// Write services/api.chiperka (service template)
+	if err := os.WriteFile(filepath.Join("services", "api.chiperka"), []byte(apiServiceContent), 0644); err != nil {
+		return fmt.Errorf("failed to write services/api.chiperka: %w", err)
 	}
 
 	// Add .chiperka/results/ to .gitignore if it exists
@@ -148,10 +162,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("Created .chiperka/chiperka.yaml")
+	fmt.Println("Created services/api.chiperka")
 	fmt.Println("Created tests/health.chiperka")
 	fmt.Println("Created tests/api.chiperka")
 	fmt.Println()
-	fmt.Println("Run your tests with: chiperka test tests")
+	fmt.Println("Run your tests with: chiperka test")
 
 	return nil
 }

@@ -2,6 +2,7 @@
 package finder
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,6 +52,33 @@ func (f *Finder) FindTestFiles() ([]string, error) {
 
 	if err != nil {
 		return nil, err
+	}
+
+	return files, nil
+}
+
+// FindAll discovers .chiperka files across multiple root paths, deduplicating
+// results by absolute path. Each path is walked recursively.
+func FindAll(paths []string) ([]string, error) {
+	seen := make(map[string]struct{})
+	var files []string
+
+	for _, root := range paths {
+		f := New(root)
+		found, err := f.FindTestFiles()
+		if err != nil {
+			return nil, fmt.Errorf("discovery path %s: %w", root, err)
+		}
+		for _, path := range found {
+			abs, err := filepath.Abs(path)
+			if err != nil {
+				abs = path
+			}
+			if _, ok := seen[abs]; !ok {
+				seen[abs] = struct{}{}
+				files = append(files, path)
+			}
+		}
 	}
 
 	return files, nil

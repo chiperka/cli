@@ -831,24 +831,32 @@ func handleExecute(version string) func(ctx context.Context, request mcp.CallToo
 
 // --- Helpers ---
 
-// discoverTests finds and parses .chiperka files at path, applying filters
-// to the test collection. Service-kind files at the same path contribute to
-// the returned ServiceTemplateCollection (filters do not apply to services).
+// discoveryPaths returns the configured discovery paths from config, falling
+// back to the given default path if none are configured.
+func discoveryPaths(fallback string) []string {
+	cfg, _ := loadConfig("")
+	if cfg != nil && len(cfg.Discovery) > 0 {
+		return cfg.Discovery
+	}
+	return []string{fallback}
+}
+
+// discoverTests finds and parses .chiperka files using discovery paths from
+// config, applying filters to the test collection. If path points to a
+// specific file or directory and discovery is configured, the full spec is
+// loaded but tests are filtered to those under path.
 func discoverTests(path string, tags []string, filter string) (*model.TestCollection, *model.ServiceTemplateCollection, error) {
-	info, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return nil, nil, fmt.Errorf("path does not exist: %s", path)
+	cfg, _ := loadConfig("")
+	paths := cfg.Discovery
+
+	if len(paths) == 0 {
+		// No discovery configured — use path directly (legacy behavior)
+		paths = []string{path}
 	}
 
-	var files []string
-	if !info.IsDir() && strings.HasSuffix(path, ".chiperka") {
-		files = []string{path}
-	} else {
-		f := finder.New(path)
-		files, err = f.FindTestFiles()
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to find files: %w", err)
-		}
+	files, err := finder.FindAll(paths)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	if len(files) == 0 {
@@ -859,6 +867,29 @@ func discoverTests(path string, tags []string, filter string) (*model.TestCollec
 	parseResult := p.ParseAll(files)
 
 	tests := parseResult.Tests
+
+	// If discovery is configured and a specific path was given, filter tests to that path
+	if len(cfg.Discovery) > 0 && path != "." && path != "" {
+		absPath, _ := filepath.Abs(path)
+		info, statErr := os.Stat(path)
+		isFile := statErr == nil && !info.IsDir()
+
+		filtered := model.NewTestCollection()
+		for _, suite := range tests.Suites {
+			absSuite, _ := filepath.Abs(suite.FilePath)
+			if isFile {
+				if absSuite == absPath {
+					filtered.Suites = append(filtered.Suites, suite)
+				}
+			} else {
+				if strings.HasPrefix(absSuite, absPath+string(filepath.Separator)) || absSuite == absPath {
+					filtered.Suites = append(filtered.Suites, suite)
+				}
+			}
+		}
+		tests = filtered
+	}
+
 	if len(tags) > 0 {
 		tests = tests.FilterByTags(tags)
 	}
@@ -869,14 +900,13 @@ func discoverTests(path string, tags []string, filter string) (*model.TestCollec
 	return tests, parseResult.Services, nil
 }
 
-// discoverServices walks dir for .chiperka files and returns the collected
-// service templates only. Used by handlers that operate on inline test YAML
-// and still need access to service references defined elsewhere in the project.
+// discoverServices finds .chiperka files using discovery paths from config
+// and returns the collected service templates only.
 func discoverServices(dir string) (*model.ServiceTemplateCollection, error) {
-	f := finder.New(dir)
-	files, err := f.FindTestFiles()
+	paths := discoveryPaths(dir)
+	files, err := finder.FindAll(paths)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find files: %w", err)
+		return nil, err
 	}
 	if len(files) == 0 {
 		return model.NewServiceTemplateCollection(), nil

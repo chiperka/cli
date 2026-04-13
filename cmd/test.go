@@ -115,38 +115,46 @@ func init() {
 func runTests(cmd *cobra.Command, args []string) error {
 	defer telemetry.Wait(4 * time.Second)
 
-	// Determine the search path
-	searchPath := "."
+	// Load configuration first — we need discovery paths before finding files
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	// Discover the full project specification from discovery paths.
+	// CLI argument acts as a filter on which tests to run, not as the
+	// sole source of files — service templates may live elsewhere.
+	discoveryPaths := cfg.Discovery
+	var cliPath string
 	if len(args) > 0 {
-		searchPath = args[0]
-	}
-
-	// Verify path exists
-	info, err := os.Stat(searchPath)
-	if os.IsNotExist(err) {
-		return fmt.Errorf("path does not exist: %s", searchPath)
-	}
-
-	// Find test files - either single file or directory search
-	var files []string
-	if !info.IsDir() && strings.HasSuffix(searchPath, ".chiperka") {
-		// Single file specified
-		files = []string{searchPath}
-	} else {
-		// Directory search
-		f := finder.New(searchPath)
-		files, err = f.FindTestFiles()
-		if err != nil {
-			return fmt.Errorf("failed to find test files: %w", err)
+		cliPath = args[0]
+		// Verify CLI path exists
+		if _, err := os.Stat(cliPath); os.IsNotExist(err) {
+			return fmt.Errorf("path does not exist: %s", cliPath)
 		}
 	}
 
+	// If no discovery paths configured, fall back to CLI arg or "."
+	if len(discoveryPaths) == 0 {
+		fallback := "."
+		if cliPath != "" {
+			fallback = cliPath
+		}
+		discoveryPaths = []string{fallback}
+	}
+
+	// Find all .chiperka files across discovery paths
+	files, err := finder.FindAll(discoveryPaths)
+	if err != nil {
+		return fmt.Errorf("failed to find test files: %w", err)
+	}
+
 	if len(files) == 0 {
-		fmt.Printf("No *.chiperka files found in %s\n", searchPath)
+		fmt.Printf("No *.chiperka files found in discovery paths %v\n", discoveryPaths)
 		return nil
 	}
 
-	// Parse all found files
+	// Parse all found files — this gives us the full project spec
 	p := parser.New()
 	parseResult := p.ParseAll(files)
 
@@ -155,23 +163,25 @@ func runTests(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
 
-	// Service-kind files are not runnable directly. If the user pointed at a
-	// path that contains only service definitions (no tests), surface a clear
-	// error instead of silently doing nothing.
+	// Service templates come from .chiperka files of kind: service
+	services := parseResult.Services
+
+	// When CLI path is given and discovery is configured, filter tests
+	// to only those from the specified path (services remain full).
+	if cliPath != "" && len(cfg.Discovery) > 0 {
+		parseResult.Tests = filterTestsByPath(parseResult.Tests, cliPath)
+	}
+
+	// Service-kind files are not runnable directly.
+	displayPath := strings.Join(discoveryPaths, ", ")
+	if cliPath != "" {
+		displayPath = cliPath
+	}
 	if parseResult.Tests.TotalTests() == 0 && parseResult.Services.HasTemplates() {
 		return exitErrorf(ExitValidationError,
 			"services are not runnable directly — reference them from a test (found %d service(s) and 0 tests at %s)",
-			len(parseResult.Services.Templates), searchPath)
+			len(parseResult.Services.Templates), displayPath)
 	}
-
-	// Load configuration file
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
-	// Service templates now come from .chiperka files of kind: service
-	// discovered alongside test files. chiperka.yaml no longer holds them.
-	services := parseResult.Services
 
 	// Show telemetry notice on first run
 	telemetry.ShowNoticeIfNeeded(teamcityOutput || jsonOutput)
@@ -478,6 +488,38 @@ func loadConfig() (*config.Config, error) {
 		fmt.Fprintln(os.Stderr, "Starting without configuration file")
 	}
 	return cfg, nil
+}
+
+// filterTestsByPath returns only suites whose FilePath is within the given
+// path. If path points to a single .chiperka file, only that file matches.
+// If it points to a directory, any suite under that directory matches.
+func filterTestsByPath(tests *model.TestCollection, path string) *model.TestCollection {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		absPath = path
+	}
+
+	info, _ := os.Stat(path)
+	isFile := info != nil && !info.IsDir()
+
+	filtered := model.NewTestCollection()
+	for _, suite := range tests.Suites {
+		absSuite, err := filepath.Abs(suite.FilePath)
+		if err != nil {
+			absSuite = suite.FilePath
+		}
+
+		if isFile {
+			if absSuite == absPath {
+				filtered.Suites = append(filtered.Suites, suite)
+			}
+		} else {
+			if strings.HasPrefix(absSuite, absPath+string(filepath.Separator)) || absSuite == absPath {
+				filtered.Suites = append(filtered.Suites, suite)
+			}
+		}
+	}
+	return filtered
 }
 
 // resolveCloudToken resolves the auth token for cloud mode.

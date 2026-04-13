@@ -35,6 +35,7 @@ type CloudConfig struct {
 
 // Config represents the contents of a chiperka.yaml configuration file.
 type Config struct {
+	Discovery          []string          `yaml:"discovery,omitempty"`
 	ExecutionVariables map[string]string `yaml:"executionVariables"`
 	Cloud              CloudConfig       `yaml:"cloud,omitempty"`
 }

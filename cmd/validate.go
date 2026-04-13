@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -70,44 +69,51 @@ func runValidate(cmd *cobra.Command, args []string) error {
 		telemetry.Wait(2 * time.Second)
 	}()
 
-	searchPath := "."
+	// Load configuration first — we need discovery paths
+	cfg, err := loadValidateConfig()
+	if err != nil {
+		return err
+	}
+
+	discoveryPaths := cfg.Discovery
+	var cliPath string
 	if len(args) > 0 {
-		searchPath = args[0]
-	}
-
-	// Verify path exists
-	info, err := os.Stat(searchPath)
-	if os.IsNotExist(err) {
-		return fmt.Errorf("path does not exist: %s", searchPath)
-	}
-
-	// Find test files
-	var files []string
-	if !info.IsDir() && strings.HasSuffix(searchPath, ".chiperka") {
-		files = []string{searchPath}
-	} else {
-		f := finder.New(searchPath)
-		files, err = f.FindTestFiles()
-		if err != nil {
-			return fmt.Errorf("failed to find test files: %w", err)
+		cliPath = args[0]
+		if _, err := os.Stat(cliPath); os.IsNotExist(err) {
+			return fmt.Errorf("path does not exist: %s", cliPath)
 		}
 	}
 
+	// If no discovery paths configured, fall back to CLI arg or "."
+	if len(discoveryPaths) == 0 {
+		fallback := "."
+		if cliPath != "" {
+			fallback = cliPath
+		}
+		discoveryPaths = []string{fallback}
+	}
+
+	// Find all .chiperka files across discovery paths
+	files, err := finder.FindAll(discoveryPaths)
+	if err != nil {
+		return fmt.Errorf("failed to find test files: %w", err)
+	}
+
 	if len(files) == 0 {
-		fmt.Printf("No *.chiperka files found in %s\n", searchPath)
+		fmt.Printf("No *.chiperka files found in discovery paths %v\n", discoveryPaths)
 		return nil
 	}
 
-	// Parse all files
+	// Parse all files — full project spec
 	p := parser.New()
 	parseResult := p.ParseAll(files)
 
-	// Load configuration (executionVariables, cloud). Services come from
-	// .chiperka files of kind: service via the parser.
-	if _, err := loadValidateConfig(); err != nil {
-		return err
-	}
 	services := parseResult.Services
+
+	// When CLI path is given and discovery is configured, filter tests
+	if cliPath != "" && len(cfg.Discovery) > 0 {
+		parseResult.Tests = filterTestsByPath(parseResult.Tests, cliPath)
+	}
 
 	// Collect issues per file
 	var allIssues []validationIssue
