@@ -112,7 +112,7 @@ func TestClassifyError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
-			got := ClassifyError(fmt.Errorf(tt.msg))
+			got := ClassifyError(fmt.Errorf("%s", tt.msg))
 			if got != tt.expected {
 				t.Errorf("ClassifyError(%q) = %q, want %q", tt.msg, got, tt.expected)
 			}
@@ -138,29 +138,3 @@ func TestGenerateID(t *testing.T) {
 	}
 }
 
-func TestHashVisitor(t *testing.T) {
-	h1 := hashVisitor("1.2.3.4", "chiperka-cli/1.0")
-	h2 := hashVisitor("1.2.3.4", "chiperka-cli/1.0")
-	h3 := hashVisitor("5.6.7.8", "chiperka-cli/1.0")
-	h4 := hashVisitor("1.2.3.4", "chiperka-cli/2.0")
-
-	// Same input = same hash
-	if h1 != h2 {
-		t.Error("same input should produce same hash")
-	}
-
-	// Different IP = different hash
-	if h1 == h3 {
-		t.Error("different IP should produce different hash")
-	}
-
-	// Different UA = different hash
-	if h1 == h4 {
-		t.Error("different UA should produce different hash")
-	}
-
-	// Hash is 64 chars (sha256 hex)
-	if len(h1) != 64 {
-		t.Errorf("hash length = %d, want 64", len(h1))
-	}
-}

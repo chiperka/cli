@@ -45,8 +45,6 @@ type Manager struct {
 	pool *NetworkPool
 	// serviceArtifactDefs stores artifact definitions per service name
 	serviceArtifactDefs map[string][]model.ServiceArtifact
-	// acquiredServiceSlots tracks which service template slots this manager holds
-	acquiredServiceSlots []string
 }
 
 // dockerClient is a shared Docker SDK client for API calls.
@@ -151,49 +149,6 @@ func acquireContainerSlot(ctx context.Context) error {
 func releaseContainerSlot() {
 	if containerSem != nil {
 		<-containerSem
-	}
-}
-
-// serviceSems limits concurrent running instances of a service template.
-// Key is the template name (service Ref), value is a buffered channel acting as a semaphore.
-var serviceSems map[string]chan struct{}
-
-// SetServiceLimits configures per-service concurrency limits.
-// limits maps service template name to max concurrent instances.
-func SetServiceLimits(limits map[string]int) {
-	if len(limits) == 0 {
-		return
-	}
-	serviceSems = make(map[string]chan struct{}, len(limits))
-	for name, n := range limits {
-		if n > 0 {
-			serviceSems[name] = make(chan struct{}, n)
-		}
-	}
-}
-
-func acquireServiceSlot(ctx context.Context, name string) error {
-	if serviceSems == nil || name == "" {
-		return nil
-	}
-	sem, ok := serviceSems[name]
-	if !ok {
-		return nil
-	}
-	select {
-	case sem <- struct{}{}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func releaseServiceSlot(name string) {
-	if serviceSems == nil || name == "" {
-		return
-	}
-	if sem, ok := serviceSems[name]; ok {
-		<-sem
 	}
 }
 
@@ -387,16 +342,6 @@ func (m *Manager) StartServices(ctx context.Context, services []model.Service) (
 // If the service fails healthcheck, it is restarted up to maxAttempts times.
 func (m *Manager) startService(ctx context.Context, service model.Service) (string, ServiceTimings, error) {
 	var timings ServiceTimings
-
-	// Acquire per-service concurrency slot (blocks until available)
-	if service.Ref != "" {
-		if err := acquireServiceSlot(ctx, service.Ref); err != nil {
-			return "", timings, fmt.Errorf("failed to acquire service slot for %s: %w", service.Ref, err)
-		}
-		m.containersMu.Lock()
-		m.acquiredServiceSlots = append(m.acquiredServiceSlots, service.Ref)
-		m.containersMu.Unlock()
-	}
 
 	// Resolve image once (build or pull)
 	resolveStart := time.Now()
@@ -890,15 +835,6 @@ func (m *Manager) CleanupWithArtifacts(ctx context.Context, collector *artifact.
 	}
 	wg.Wait()
 	m.runningContainers = make(map[string]string)
-
-	// Release all acquired service slots
-	m.containersMu.Lock()
-	slots := m.acquiredServiceSlots
-	m.acquiredServiceSlots = nil
-	m.containersMu.Unlock()
-	for _, slot := range slots {
-		releaseServiceSlot(slot)
-	}
 
 	// Release network back to pool or remove it
 	if m.networkName != "" {

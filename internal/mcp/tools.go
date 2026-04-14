@@ -110,9 +110,6 @@ func runTool() mcp.Tool {
 		mcp.WithBoolean("regenerate_snapshots",
 			mcp.Description("Update snapshot files instead of comparing them"),
 		),
-		mcp.WithNumber("workers",
-			mcp.Description("Number of parallel test workers (0 or omit = auto-detect from CPU count)"),
-		),
 	)
 }
 
@@ -170,7 +167,7 @@ func handleList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 		Image        string            `json:"image"`
 		HealthCheck  string            `json:"healthcheck,omitempty"`
 		Environment  map[string]string `json:"environment,omitempty"`
-		MaxInstances int               `json:"max_instances,omitempty"`
+		Weight       int               `json:"weight,omitempty"`
 	}
 	type listResult struct {
 		Suites     []listSuite            `json:"suites"`
@@ -220,7 +217,7 @@ func handleList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 			tj := templateJSON{
 				Image:        tmpl.Image,
 				Environment:  tmpl.Environment,
-				MaxInstances: tmpl.MaxInstances,
+				Weight:       tmpl.Weight,
 			}
 			if tmpl.HealthCheck != nil && tmpl.HealthCheck.Test != "" {
 				tj.HealthCheck = string(tmpl.HealthCheck.Test)
@@ -509,9 +506,17 @@ func handleRun(version string) func(ctx context.Context, request mcp.CallToolReq
 			timeout = int(t)
 		}
 		regenerateSnapshots, _ := request.GetArguments()["regenerate_snapshots"].(bool)
-		requestedWorkers := 0
-		if w, ok := request.GetArguments()["workers"].(float64); ok && w > 0 {
-			requestedWorkers = int(w)
+		// Load capacity from machine config
+		machineConfig := telemetry.LoadMachineConfig()
+		capacity := runtime.NumCPU() * 2
+		maxContainers := 0
+		if machineConfig != nil {
+			if machineConfig.Capacity > 0 {
+				capacity = machineConfig.Capacity
+			}
+			if machineConfig.MaxContainers > 0 {
+				maxContainers = machineConfig.MaxContainers
+			}
 		}
 
 		cfg, err := loadConfig(configFile)
@@ -545,20 +550,12 @@ func handleRun(version string) func(ctx context.Context, request mcp.CallToolReq
 		collector := subscribers.NewEventCollector()
 		collector.Register(bus)
 
-		workerCount := requestedWorkers
-		if workerCount <= 0 {
-			workerCount = runtime.NumCPU()
-			if workerCount < 1 {
-				workerCount = 1
-			}
-		}
-
 		// Generate run UUID upfront so artifacts are written directly into the result tree
 		runUUID := result.NewRunUUID()
 		runDir := filepath.Join(".chiperka", "results", "runs", runUUID)
 		os.MkdirAll(runDir, 0755)
 
-		r, err := runner.New(bus, workerCount, runDir, services, regenerateSnapshots, timeout, version, collector, 0, cfg.ExecutionVariables)
+		r, err := runner.New(bus, capacity, maxContainers, runDir, services, regenerateSnapshots, timeout, version, collector, cfg.ExecutionVariables)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create test runner: %w", err)
 		}
@@ -572,7 +569,7 @@ func handleRun(version string) func(ctx context.Context, request mcp.CallToolReq
 			Version:          version,
 			Source:           "mcp",
 			DurationMs:       time.Since(startTime).Milliseconds(),
-			WorkerCount:      workerCount,
+			Capacity:         capacity,
 			ExecutorType:     runStats.ExecutorType,
 			ServiceCount:     runStats.ServiceCount,
 			Snapshots:        runStats.HasSnapshots,
@@ -640,12 +637,20 @@ func handleExecute(version string) func(ctx context.Context, request mcp.CallToo
 		collector := subscribers.NewEventCollector()
 		collector.Register(bus)
 
-		workerCount := runtime.NumCPU()
-		if workerCount < 1 {
-			workerCount = 1
+		// Load capacity from machine config
+		execMachineConfig := telemetry.LoadMachineConfig()
+		execCapacity := runtime.NumCPU() * 2
+		execMaxContainers := 0
+		if execMachineConfig != nil {
+			if execMachineConfig.Capacity > 0 {
+				execCapacity = execMachineConfig.Capacity
+			}
+			if execMachineConfig.MaxContainers > 0 {
+				execMaxContainers = execMachineConfig.MaxContainers
+			}
 		}
 
-		r, err := runner.New(bus, workerCount, os.TempDir(), services, false, timeout, version, collector, 0, cfg.ExecutionVariables)
+		r, err := runner.New(bus, execCapacity, execMaxContainers, os.TempDir(), services, false, timeout, version, collector, cfg.ExecutionVariables)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create test runner: %w", err)
 		}
@@ -659,7 +664,7 @@ func handleExecute(version string) func(ctx context.Context, request mcp.CallToo
 			Version:          version,
 			Source:           "mcp",
 			DurationMs:       time.Since(execStartTime).Milliseconds(),
-			WorkerCount:      workerCount,
+			Capacity:         execCapacity,
 			ExecutorType:     execRunStats.ExecutorType,
 			ServiceCount:     execRunStats.ServiceCount,
 			Snapshots:        execRunStats.HasSnapshots,

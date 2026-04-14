@@ -35,9 +35,7 @@ var filterName string
 var verboseOutput bool
 var debugOutput bool
 var testTimeout int
-var workerCount int
 var cloudMode bool
-var cpuThreshold float64
 var teamcityOutput bool
 var jsonOutput bool
 var pathMapping string
@@ -101,9 +99,7 @@ func init() {
 	testCmd.Flags().BoolVar(&verboseOutput, "verbose", false, "Show detailed logs (all events)")
 	testCmd.Flags().BoolVar(&debugOutput, "debug", false, "Show docker commands (implies --verbose)")
 	testCmd.Flags().IntVar(&testTimeout, "timeout", 300, "Maximum time in seconds for each test execution")
-	testCmd.Flags().IntVar(&workerCount, "workers", 0, "Number of parallel test workers (0 = auto-detect from CPU count)")
 	testCmd.Flags().BoolVar(&cloudMode, "cloud", false, "Run tests on remote cloud server (configured via chiperka.yaml cloud.url or CHIPERKA_CLOUD_URL env)")
-	testCmd.Flags().Float64Var(&cpuThreshold, "cpu-threshold", 0, "CPU load threshold (0.0-1.0) - pause test execution when exceeded (0 = disabled)")
 	testCmd.Flags().BoolVar(&teamcityOutput, "teamcity", false, "Output TeamCity service messages for IDE integration")
 	testCmd.Flags().BoolVar(&jsonOutput, "json", false, "Output NDJSON for machine consumption")
 	testCmd.Flags().StringVar(&pathMapping, "path-mapping", "", "Path prefix mapping for artifact paths (container=host, e.g. /srv/chiperka=/Users/me/project)")
@@ -272,7 +268,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	if cloudMode {
 		ignoredInCloud := []string{
 			"regenerate-snapshots",
-			"timeout", "workers",
+			"timeout",
 		}
 		for _, flag := range ignoredInCloud {
 			if cmd.Flags().Changed(flag) {
@@ -324,12 +320,17 @@ func runTests(cmd *cobra.Command, args []string) error {
 		htmlWriter = output.NewHTMLWriter()
 	}
 
-	// Auto-detect worker count from CPU count if not specified
-	if workerCount <= 0 {
-		workerCount = runtime.NumCPU()
-	}
-	if workerCount < 1 {
-		workerCount = 1
+	// Load machine config for capacity and maxContainers
+	machineConfig := telemetry.LoadMachineConfig()
+	capacity := runtime.NumCPU() * 2 // default
+	maxContainers := 0               // unlimited
+	if machineConfig != nil {
+		if machineConfig.Capacity > 0 {
+			capacity = machineConfig.Capacity
+		}
+		if machineConfig.MaxContainers > 0 {
+			maxContainers = machineConfig.MaxContainers
+		}
 	}
 
 	// Set up context with Ctrl+C handler for graceful shutdown
@@ -356,7 +357,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	}
 
 	// Run tests and output results — artifacts go directly into the result tree
-	r, err := runner.New(bus, workerCount, resultRunDir, services, regenerateSnapshots, testTimeout, Version, collector, cpuThreshold, cfg.ExecutionVariables)
+	r, err := runner.New(bus, capacity, maxContainers, resultRunDir, services, regenerateSnapshots, testTimeout, Version, collector, cfg.ExecutionVariables)
 	if err != nil {
 		telemetry.RecordError(Version, "run", "", telemetry.ClassifyError(err))
 		return fmt.Errorf("failed to create test runner: %w", err)
@@ -393,7 +394,7 @@ func runTests(cmd *cobra.Command, args []string) error {
 	telemetry.RecordRun(telemetry.RunParams{
 		Version:          Version,
 		DurationMs:       time.Since(startTime).Milliseconds(),
-		WorkerCount:      workerCount,
+		Capacity:         capacity,
 		ExecutorType:     runStats.ExecutorType,
 		ServiceCount:     runStats.ServiceCount,
 		HTMLReport:       htmlOutput != "",
@@ -701,7 +702,6 @@ func runTestsCloud(apiURL string, tests *model.TestCollection, services *model.S
 		Version:          Version,
 		DurationMs:       time.Since(startTime).Milliseconds(),
 		CloudMode:        true,
-		WorkerCount:      workerCount,
 		ExecutorType:     cloudRunStats.ExecutorType,
 		ServiceCount:     cloudRunStats.ServiceCount,
 		HTMLReport:       htmlOutput != "",

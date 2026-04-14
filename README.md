@@ -207,6 +207,7 @@ Chiperka is in active early development. The CLI runs, the MCP server runs, and 
 - **Your code is your code.** Chiperka never trains models on your data.
 - **MCP-first, not MCP-only.** When other agent protocols ship with real adoption, we'll write adapters. No panic.
 - **Local first.** Everything runs on your machine, against your Docker, on your network.
+- **Weight-based scheduling.** Each service has a weight (default 1). Tests run in parallel as long as total weight fits within the configured capacity. Capacity is set in `~/.chiperka/config.json` or via `--capacity` flag.
 
 ---
 

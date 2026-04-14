@@ -38,7 +38,7 @@ type Event struct {
 	TestsSkipped int `json:"tests_skipped,omitempty"`
 	SuiteCount   int `json:"suite_count,omitempty"`
 	ServiceCount int `json:"service_count,omitempty"`
-	WorkerCount  int `json:"worker_count,omitempty"`
+	Capacity     int `json:"capacity,omitempty"`
 
 	// Executor
 	ExecutorType string `json:"executor_type,omitempty"` // http, cli, mixed
@@ -64,7 +64,7 @@ type RunParams struct {
 	Version      string
 	Source       string // "cli" or "mcp", defaults to "cli"
 	DurationMs   int64
-	WorkerCount  int
+	Capacity     int
 	CloudMode    bool
 	ExecutorType string
 	ServiceCount int
@@ -163,7 +163,7 @@ func RecordRun(params RunParams, testsTotal, testsPassed, testsFailed, testsSkip
 	event.TestsSkipped = testsSkipped
 	event.SuiteCount = suiteCount
 	event.ServiceCount = params.ServiceCount
-	event.WorkerCount = params.WorkerCount
+	event.Capacity = params.Capacity
 	event.ExecutorType = params.ExecutorType
 
 	// Feature flags

@@ -15,9 +15,11 @@ type TelemetryConfig struct {
 
 // MachineConfig is the top-level structure for ~/.chiperka/config.json.
 type MachineConfig struct {
-	InstallID string          `json:"install_id,omitempty"`
-	Telemetry TelemetryConfig `json:"telemetry"`
-	UpdatedAt time.Time       `json:"updated_at"`
+	InstallID     string          `json:"install_id,omitempty"`
+	Telemetry     TelemetryConfig `json:"telemetry"`
+	Capacity      int             `json:"capacity,omitempty"`       // max concurrent weight for test scheduling (0 = auto: NumCPU * 2)
+	MaxContainers int             `json:"maxContainers,omitempty"`  // max concurrent Docker containers (0 = unlimited)
+	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
 // legacyConfig mirrors the old flat telemetry.json format for migration.

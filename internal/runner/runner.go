@@ -2,7 +2,6 @@
 package runner
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -12,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,16 +56,70 @@ type Runner struct {
 	events              *events.Emitter
 	eventCollector      *subscribers.EventCollector
 	evaluator           *assertion.Evaluator
-	workerCount         int
+	capacity            int
+	maxContainers       int
 	collector           *artifact.Collector
 	regenerateSnapshots bool
 	serviceTemplates    *model.ServiceTemplateCollection
 	testTimeoutSec      int
 	version             string
 	networkPool         *docker.NetworkPool
-	cpuThreshold        float64
 	executionVars       []string
 	onTestComplete      func(result *model.TestResult, suiteName, suiteFilePath string)
+}
+
+// weightScheduler controls concurrent test execution based on resource weights.
+type weightScheduler struct {
+	capacity       int
+	maxContainers  int
+	usedWeight     int
+	usedContainers int
+	cancelled      bool
+	mu             sync.Mutex
+	cond           *sync.Cond
+}
+
+func newWeightScheduler(capacity, maxContainers int) *weightScheduler {
+	s := &weightScheduler{capacity: capacity, maxContainers: maxContainers}
+	s.cond = sync.NewCond(&s.mu)
+	return s
+}
+
+// cancel wakes all waiters so they can check context and bail out.
+func (s *weightScheduler) cancel() {
+	s.mu.Lock()
+	s.cancelled = true
+	s.mu.Unlock()
+	s.cond.Broadcast()
+}
+
+// acquire blocks until the test fits within capacity and container limits.
+// If a test's weight exceeds capacity, it runs alone (when nothing else is running).
+// Returns false if the scheduler was cancelled (context done).
+func (s *weightScheduler) acquire(weight, containers int) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for {
+		if s.cancelled {
+			return false
+		}
+		fitsWeight := (s.usedWeight+weight <= s.capacity) || (s.usedWeight == 0)
+		fitsContainers := s.maxContainers <= 0 || (s.usedContainers+containers <= s.maxContainers)
+		if fitsWeight && fitsContainers {
+			s.usedWeight += weight
+			s.usedContainers += containers
+			return true
+		}
+		s.cond.Wait()
+	}
+}
+
+func (s *weightScheduler) release(weight, containers int) {
+	s.mu.Lock()
+	s.usedWeight -= weight
+	s.usedContainers -= containers
+	s.mu.Unlock()
+	s.cond.Broadcast()
 }
 
 // SetOnTestComplete registers a callback invoked immediately after each test
@@ -79,7 +131,7 @@ func (r *Runner) SetOnTestComplete(fn func(result *model.TestResult, suiteName, 
 }
 
 // New creates a new Runner with the given event bus.
-func New(bus *events.Bus, workerCount int, artifactsDir string, services *model.ServiceTemplateCollection, regenerateSnapshots bool, testTimeoutSec int, version string, eventCollector *subscribers.EventCollector, cpuThreshold float64, executionVariables map[string]string) (*Runner, error) {
+func New(bus *events.Bus, capacity int, maxContainers int, artifactsDir string, services *model.ServiceTemplateCollection, regenerateSnapshots bool, testTimeoutSec int, version string, eventCollector *subscribers.EventCollector, executionVariables map[string]string) (*Runner, error) {
 	collector, err := artifact.NewCollector(artifactsDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create artifact collector: %w", err)
@@ -97,13 +149,13 @@ func New(bus *events.Bus, workerCount int, artifactsDir string, services *model.
 		events:              emitter,
 		eventCollector:      eventCollector,
 		evaluator:           assertion.NewEvaluator(),
-		workerCount:         workerCount,
+		capacity:            capacity,
+		maxContainers:       maxContainers,
 		collector:           collector,
 		regenerateSnapshots: regenerateSnapshots,
 		serviceTemplates:    services,
 		testTimeoutSec:      testTimeoutSec,
 		version:             version,
-		cpuThreshold:        cpuThreshold,
 		executionVars:       execVars,
 	}, nil
 }
@@ -135,24 +187,20 @@ func (r *Runner) Run(ctx context.Context, collection *model.TestCollection) *mod
 		})
 	}
 
-	// Create network pool for test execution
-	// Pool size equals worker count to ensure each worker can have a network
-	r.networkPool = docker.NewNetworkPool(r.workerCount)
+	// Create network pool for test execution — size based on capacity
+	// (rough estimate: capacity / average-weight gives max concurrent tests)
+	poolSize := r.capacity
+	if r.maxContainers > 0 && r.maxContainers < poolSize {
+		poolSize = r.maxContainers
+	}
+	if poolSize < 1 {
+		poolSize = 1
+	}
+	r.networkPool = docker.NewNetworkPool(poolSize)
 	defer r.networkPool.Close()
 
-	// Limit concurrent container creation to avoid overwhelming the Docker daemon
-	docker.SetMaxConcurrentContainers(r.workerCount)
-
-	// Set per-service concurrency limits from service templates
-	if r.serviceTemplates != nil {
-		limits := make(map[string]int)
-		for _, tmpl := range r.serviceTemplates.Templates {
-			if tmpl.MaxInstances > 0 {
-				limits[tmpl.Name] = tmpl.MaxInstances
-			}
-		}
-		docker.SetServiceLimits(limits)
-	}
+	// Limit concurrent container creation
+	docker.SetMaxConcurrentContainers(poolSize)
 
 	// Build job list and suite counts for IDE lifecycle tracking
 	var jobs []testJob
@@ -171,11 +219,12 @@ func (r *Runner) Run(ctx context.Context, collection *model.TestCollection) *mod
 	}
 
 	// Emit run started event (includes per-suite test counts for IDE)
-	r.events.RunStarted(collection.TotalTests(), len(collection.Suites), r.workerCount, r.version, suiteCounts)
+	r.events.RunStarted(collection.TotalTests(), len(collection.Suites), r.capacity, r.version, suiteCounts)
 
 	r.events.Info(events.Fields{
-		"action": "run_start",
-		"msg":    fmt.Sprintf("Starting test run with %d workers", r.workerCount),
+		"action":   "run_start",
+		"capacity": fmt.Sprintf("%d", r.capacity),
+		"msg":      fmt.Sprintf("Starting test run with capacity %d", r.capacity),
 	})
 	results := r.executeParallel(ctx, jobs)
 
@@ -195,33 +244,35 @@ func (r *Runner) Run(ctx context.Context, collection *model.TestCollection) *mod
 	return runResult
 }
 
-// executeParallel runs tests using a worker pool.
+// executeParallel runs tests using weight-based scheduling.
+// Each test's weight (sum of service weights) determines how much capacity it consumes.
+// Tests run concurrently as long as total weight fits within capacity.
 func (r *Runner) executeParallel(ctx context.Context, jobs []testJob) []testResultWithIndex {
 	if len(jobs) == 0 {
 		return nil
 	}
 
-	jobChan := make(chan testJob, len(jobs))
+	scheduler := newWeightScheduler(r.capacity, r.maxContainers)
 	resultChan := make(chan testResultWithIndex, len(jobs))
 
-	// Start workers
+	// Cancel scheduler when context is done so blocked goroutines can exit
+	go func() {
+		<-ctx.Done()
+		scheduler.cancel()
+	}()
+
 	var wg sync.WaitGroup
-	for i := 0; i < r.workerCount; i++ {
-		wg.Add(1)
-		go r.worker(ctx, &wg, jobChan, resultChan)
-	}
-
-	// Send jobs
 	for _, job := range jobs {
-		jobChan <- job
+		wg.Add(1)
+		go func(j testJob) {
+			defer wg.Done()
+			r.executeWithScheduler(ctx, scheduler, j, resultChan)
+		}(job)
 	}
-	close(jobChan)
 
-	// Wait for workers to finish
 	wg.Wait()
 	close(resultChan)
 
-	// Collect results
 	var results []testResultWithIndex
 	for result := range resultChan {
 		results = append(results, result)
@@ -230,289 +281,249 @@ func (r *Runner) executeParallel(ctx context.Context, jobs []testJob) []testResu
 	return results
 }
 
-// getSystemLoadAverage returns the 1-minute load average normalized by CPU count.
-// Returns a value between 0.0 and 1.0+ where 1.0 means 100% CPU utilization.
-func getSystemLoadAverage() (float64, error) {
-	numCPU := float64(runtime.NumCPU())
+// executeWithScheduler acquires capacity, runs the test, and releases capacity.
+func (r *Runner) executeWithScheduler(ctx context.Context, scheduler *weightScheduler, job testJob, results chan<- testResultWithIndex) {
+	weight := job.test.Weight()
+	containers := job.test.ContainerCount()
 
-	// Try to read from /proc/loadavg (Linux)
-	file, err := os.Open("/proc/loadavg")
-	if err == nil {
-		defer file.Close()
-		scanner := bufio.NewScanner(file)
-		if scanner.Scan() {
-			fields := strings.Fields(scanner.Text())
-			if len(fields) >= 1 {
-				load1, err := strconv.ParseFloat(fields[0], 64)
-				if err == nil {
-					return load1 / numCPU, nil
-				}
-			}
-		}
-	}
-
-	// Fallback for macOS/BSD: /proc/loadavg doesn't exist
-	// Return 0 (allow execution) - CPU backpressure only works on Linux
-	return 0, nil
-}
-
-// isCPUOverloaded checks if the system CPU is above the threshold.
-func (r *Runner) isCPUOverloaded() bool {
-	if r.cpuThreshold <= 0 {
-		return false // disabled
-	}
-	load, err := getSystemLoadAverage()
-	if err != nil {
-		return false // on error, allow work
-	}
-	return load > r.cpuThreshold
-}
-
-// waitForCPU blocks until CPU load drops below the threshold.
-func (r *Runner) waitForCPU() {
-	logged := false
-	for r.isCPUOverloaded() {
-		if !logged {
-			load, _ := getSystemLoadAverage()
-			r.events.Info(events.Fields{
-				"action": "cpu_backpressure",
-				"load":   fmt.Sprintf("%.0f%%", load*100),
-				"msg":    fmt.Sprintf("CPU overloaded (%.0f%%), waiting...", load*100),
-			})
-			logged = true
-		}
-		time.Sleep(2 * time.Second)
-	}
-}
-
-// worker processes test jobs from the channel.
-func (r *Runner) worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan testJob, results chan<- testResultWithIndex) {
-	defer wg.Done()
-
-	for job := range jobs {
-		// Skip remaining jobs if context was cancelled (Ctrl+C)
-		if ctx.Err() != nil {
-			skipEvents := r.events.ForTest(job.suiteName, job.test.Name)
-			skipEvents.SetFilePath(job.suiteFilePath)
-			skipEvents.TestSkipped("Interrupted")
-
-			results <- testResultWithIndex{
-				suiteIndex: job.suiteIndex,
-				testIndex:  job.testIndex,
-				result: model.TestResult{
-					Test:   job.test,
-					Status: model.StatusSkipped,
-					UUID:   generateUUID(),
-				},
-			}
-			continue
-		}
-
-		// Wait if CPU is overloaded
-		r.waitForCPU()
-		// Generate unique UUID for this test run
-		testUUID := generateUUID()
-
-		// Create test-scoped event emitter with UUID and file path
-		testEvents := r.events.ForTest(job.suiteName, job.test.Name)
-		testEvents.SetUUID(testUUID)
-		testEvents.SetFilePath(job.suiteFilePath)
-
-		// Handle skipped tests
-		if job.test.Skipped {
-			testEvents.TestSkipped("Test marked as skipped")
-
-			r.events.Skip(events.Fields{
-				"test":   job.test.Name,
-				"suite":  job.suiteName,
-				"action": "test_skipped",
-				"uuid":   testUUID,
-				"msg":    "Test skipped",
-			})
-
-			results <- testResultWithIndex{
-				suiteIndex: job.suiteIndex,
-				testIndex:  job.testIndex,
-				result: model.TestResult{
-					Test:   job.test,
-					Status: model.StatusSkipped,
-					UUID:   testUUID,
-				},
-			}
-			continue
-		}
-
-		// Emit test started event
-		testEvents.TestStarted()
-
-		testEvents.Info(events.Fields{
-			"test":   job.test.Name,
-			"suite":  job.suiteName,
-			"action": "test_start",
-			"uuid":   testUUID,
-			"msg":    "Starting test execution",
-		})
-
-		startTime := time.Now()
-		result := r.runTestWithUUID(ctx, job.test, testUUID, testEvents, job.suiteFilePath)
-		result.Duration = time.Since(startTime)
-		result.UUID = testUUID
-
-		// Collect log entries BEFORE emitting completion events so that the
-		// onTestComplete callback (which writes per-test HTML) has access to
-		// the full log.  The TestCompleted/TestFailed event hasn't been
-		// emitted yet, so we add a synthetic completion entry manually.
-		if r.eventCollector != nil {
-			collectedEvents := r.eventCollector.EventsForTest(job.suiteName, job.test.Name)
-			for _, e := range collectedEvents {
-				level := "info"
-				action := ""
-				service := ""
-				message := e.Data.Message
-
-				switch e.Type {
-				case events.LogPass:
-					level = "pass"
-				case events.LogFail:
-					level = "fail"
-				case events.LogWarn:
-					level = "warn"
-				case events.TestStarted:
-					action = "test_started"
-					message = "Test started"
-				case events.TestCompleted:
-					level = "pass"
-					action = "test_completed"
-					message = "Test completed"
-				case events.TestFailed, events.TestError:
-					level = "fail"
-					action = "test_failed"
-					if message == "" {
-						message = "Test failed"
-					}
-				case events.TestSkipped:
-					level = "warn"
-					action = "test_skipped"
-					if message == "" {
-						message = "Test skipped"
-					}
-				case events.TestCleanup:
-					action = "test_cleanup"
-					if message == "" {
-						message = "Cleanup completed"
-					}
-				case events.TestServiceStarted:
-					action = "service_started"
-				case events.TestServiceReady:
-					action = "service_ready"
-				case events.TestHealthCheck:
-					action = "healthcheck"
-				}
-
-				if a, ok := e.Data.Details["action"].(string); ok && a != "" {
-					action = a
-				}
-				if s, ok := e.Data.Details["service"].(string); ok {
-					service = s
-				}
-
-				// Skip events with no useful information
-				if action == "" && message == "" {
-					continue
-				}
-
-				result.LogEntries = append(result.LogEntries, model.LogEntry{
-					RelativeTime: fmt.Sprintf("%.3fs", e.Timestamp.Sub(startTime).Seconds()),
-					Level:        level,
-					Action:       action,
-					Service:      service,
-					Message:      message,
-				})
-			}
-
-			// Synthetic completion log entry (the real event hasn't fired yet)
-			completionLevel := "pass"
-			completionAction := "test_completed"
-			completionMsg := "Test completed"
-			if result.Status == model.StatusFailed {
-				completionLevel = "fail"
-				completionAction = "test_failed"
-				completionMsg = "Test failed"
-			} else if result.Status == model.StatusError {
-				completionLevel = "fail"
-				completionAction = "test_failed"
-				completionMsg = "Test error"
-				if result.Error != nil {
-					completionMsg = result.Error.Error()
-				}
-			}
-			result.LogEntries = append(result.LogEntries, model.LogEntry{
-				RelativeTime: fmt.Sprintf("%.3fs", result.Duration.Seconds()),
-				Level:        completionLevel,
-				Action:       completionAction,
-				Message:      completionMsg,
-			})
-		}
-
-		// Call per-test callback (e.g. write per-test HTML report) BEFORE
-		// emitting the completion event so the file exists when the TeamCity
-		// reporter outputs the testFinished message.
-		if r.onTestComplete != nil {
-			r.onTestComplete(&result, job.suiteName, job.suiteFilePath)
-		}
-
-		// Emit test completion event and log result
-		if result.Status == model.StatusPassed {
-			testEvents.TestCompleted(result.Duration)
-
-			testEvents.Pass(events.Fields{
-				"test":     job.test.Name,
-				"suite":    job.suiteName,
-				"action":   "test_complete",
-				"uuid":     testUUID,
-				"duration": fmt.Sprintf("%.3fs", result.Duration.Seconds()),
-				"msg":      "Test passed",
-			})
-		} else if result.Status == model.StatusFailed {
-			msg := "Test failed"
-			for _, ar := range result.AssertionResults {
-				if !ar.Passed {
-					msg = ar.Message
-					break
-				}
-			}
-			testEvents.TestFailed(result.Duration, msg)
-
-			testEvents.Fail(events.Fields{
-				"test":     job.test.Name,
-				"suite":    job.suiteName,
-				"action":   "test_complete",
-				"uuid":     testUUID,
-				"duration": fmt.Sprintf("%.3fs", result.Duration.Seconds()),
-				"msg":      msg,
-			})
-		} else {
-			errMsg := "Unknown error"
-			if result.Error != nil {
-				errMsg = result.Error.Error()
-			}
-			testEvents.TestFailed(result.Duration, errMsg)
-
-			testEvents.Fail(events.Fields{
-				"test":     job.test.Name,
-				"suite":    job.suiteName,
-				"action":   "test_error",
-				"uuid":     testUUID,
-				"duration": fmt.Sprintf("%.3fs", result.Duration.Seconds()),
-				"msg":      errMsg,
-			})
-		}
+	// Skip remaining jobs if context was cancelled (Ctrl+C)
+	if ctx.Err() != nil {
+		skipEvents := r.events.ForTest(job.suiteName, job.test.Name)
+		skipEvents.SetFilePath(job.suiteFilePath)
+		skipEvents.TestSkipped("Interrupted")
 
 		results <- testResultWithIndex{
 			suiteIndex: job.suiteIndex,
 			testIndex:  job.testIndex,
-			result:     result,
+			result: model.TestResult{
+				Test:   job.test,
+				Status: model.StatusSkipped,
+				UUID:   generateUUID(),
+			},
 		}
+		return
+	}
+
+	// Wait for capacity (returns false if context was cancelled while waiting)
+	if !scheduler.acquire(weight, containers) {
+		skipEvents := r.events.ForTest(job.suiteName, job.test.Name)
+		skipEvents.SetFilePath(job.suiteFilePath)
+		skipEvents.TestSkipped("Interrupted")
+
+		results <- testResultWithIndex{
+			suiteIndex: job.suiteIndex,
+			testIndex:  job.testIndex,
+			result: model.TestResult{
+				Test:   job.test,
+				Status: model.StatusSkipped,
+				UUID:   generateUUID(),
+			},
+		}
+		return
+	}
+	defer scheduler.release(weight, containers)
+	// Generate unique UUID for this test run
+	testUUID := generateUUID()
+
+	// Create test-scoped event emitter with UUID and file path
+	testEvents := r.events.ForTest(job.suiteName, job.test.Name)
+	testEvents.SetUUID(testUUID)
+	testEvents.SetFilePath(job.suiteFilePath)
+
+	// Handle skipped tests
+	if job.test.Skipped {
+		testEvents.TestSkipped("Test marked as skipped")
+
+		r.events.Skip(events.Fields{
+			"test":   job.test.Name,
+			"suite":  job.suiteName,
+			"action": "test_skipped",
+			"uuid":   testUUID,
+			"msg":    "Test skipped",
+		})
+
+		results <- testResultWithIndex{
+			suiteIndex: job.suiteIndex,
+			testIndex:  job.testIndex,
+			result: model.TestResult{
+				Test:   job.test,
+				Status: model.StatusSkipped,
+				UUID:   testUUID,
+			},
+		}
+		return
+	}
+
+	// Emit test started event
+	testEvents.TestStarted()
+
+	testEvents.Info(events.Fields{
+		"test":   job.test.Name,
+		"suite":  job.suiteName,
+		"action": "test_start",
+		"uuid":   testUUID,
+		"msg":    "Starting test execution",
+	})
+
+	startTime := time.Now()
+	result := r.runTestWithUUID(ctx, job.test, testUUID, testEvents, job.suiteFilePath)
+	result.Duration = time.Since(startTime)
+	result.UUID = testUUID
+
+	// Collect log entries BEFORE emitting completion events so that the
+	// onTestComplete callback (which writes per-test HTML) has access to
+	// the full log.  The TestCompleted/TestFailed event hasn't been
+	// emitted yet, so we add a synthetic completion entry manually.
+	if r.eventCollector != nil {
+		collectedEvents := r.eventCollector.EventsForTest(job.suiteName, job.test.Name)
+		for _, e := range collectedEvents {
+			level := "info"
+			action := ""
+			service := ""
+			message := e.Data.Message
+
+			switch e.Type {
+			case events.LogPass:
+				level = "pass"
+			case events.LogFail:
+				level = "fail"
+			case events.LogWarn:
+				level = "warn"
+			case events.TestStarted:
+				action = "test_started"
+				message = "Test started"
+			case events.TestCompleted:
+				level = "pass"
+				action = "test_completed"
+				message = "Test completed"
+			case events.TestFailed, events.TestError:
+				level = "fail"
+				action = "test_failed"
+				if message == "" {
+					message = "Test failed"
+				}
+			case events.TestSkipped:
+				level = "warn"
+				action = "test_skipped"
+				if message == "" {
+					message = "Test skipped"
+				}
+			case events.TestCleanup:
+				action = "test_cleanup"
+				if message == "" {
+					message = "Cleanup completed"
+				}
+			case events.TestServiceStarted:
+				action = "service_started"
+			case events.TestServiceReady:
+				action = "service_ready"
+			case events.TestHealthCheck:
+				action = "healthcheck"
+			}
+
+			if a, ok := e.Data.Details["action"].(string); ok && a != "" {
+				action = a
+			}
+			if s, ok := e.Data.Details["service"].(string); ok {
+				service = s
+			}
+
+			// Skip events with no useful information
+			if action == "" && message == "" {
+				continue
+			}
+
+			result.LogEntries = append(result.LogEntries, model.LogEntry{
+				RelativeTime: fmt.Sprintf("%.3fs", e.Timestamp.Sub(startTime).Seconds()),
+				Level:        level,
+				Action:       action,
+				Service:      service,
+				Message:      message,
+			})
+		}
+
+		// Synthetic completion log entry (the real event hasn't fired yet)
+		completionLevel := "pass"
+		completionAction := "test_completed"
+		completionMsg := "Test completed"
+		if result.Status == model.StatusFailed {
+			completionLevel = "fail"
+			completionAction = "test_failed"
+			completionMsg = "Test failed"
+		} else if result.Status == model.StatusError {
+			completionLevel = "fail"
+			completionAction = "test_failed"
+			completionMsg = "Test error"
+			if result.Error != nil {
+				completionMsg = result.Error.Error()
+			}
+		}
+		result.LogEntries = append(result.LogEntries, model.LogEntry{
+			RelativeTime: fmt.Sprintf("%.3fs", result.Duration.Seconds()),
+			Level:        completionLevel,
+			Action:       completionAction,
+			Message:      completionMsg,
+		})
+	}
+
+	// Call per-test callback (e.g. write per-test HTML report) BEFORE
+	// emitting the completion event so the file exists when the TeamCity
+	// reporter outputs the testFinished message.
+	if r.onTestComplete != nil {
+		r.onTestComplete(&result, job.suiteName, job.suiteFilePath)
+	}
+
+	// Emit test completion event and log result
+	if result.Status == model.StatusPassed {
+		testEvents.TestCompleted(result.Duration)
+
+		testEvents.Pass(events.Fields{
+			"test":     job.test.Name,
+			"suite":    job.suiteName,
+			"action":   "test_complete",
+			"uuid":     testUUID,
+			"duration": fmt.Sprintf("%.3fs", result.Duration.Seconds()),
+			"msg":      "Test passed",
+		})
+	} else if result.Status == model.StatusFailed {
+		msg := "Test failed"
+		for _, ar := range result.AssertionResults {
+			if !ar.Passed {
+				msg = ar.Message
+				break
+			}
+		}
+		testEvents.TestFailed(result.Duration, msg)
+
+		testEvents.Fail(events.Fields{
+			"test":     job.test.Name,
+			"suite":    job.suiteName,
+			"action":   "test_complete",
+			"uuid":     testUUID,
+			"duration": fmt.Sprintf("%.3fs", result.Duration.Seconds()),
+			"msg":      msg,
+		})
+	} else {
+		errMsg := "Unknown error"
+		if result.Error != nil {
+			errMsg = result.Error.Error()
+		}
+		testEvents.TestFailed(result.Duration, errMsg)
+
+		testEvents.Fail(events.Fields{
+			"test":     job.test.Name,
+			"suite":    job.suiteName,
+			"action":   "test_error",
+			"uuid":     testUUID,
+			"duration": fmt.Sprintf("%.3fs", result.Duration.Seconds()),
+			"msg":      errMsg,
+		})
+	}
+
+	results <- testResultWithIndex{
+		suiteIndex: job.suiteIndex,
+		testIndex:  job.testIndex,
+		result:     result,
 	}
 }
 

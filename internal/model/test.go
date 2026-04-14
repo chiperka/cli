@@ -408,6 +408,8 @@ type Service struct {
 	HealthCheck *HealthCheck `yaml:"healthcheck,omitempty" json:"healthcheck,omitempty"`
 	// Artifacts to collect from the container after test execution
 	Artifacts []ServiceArtifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
+	// Weight represents the resource cost of running this service (default 1)
+	Weight int `yaml:"weight,omitempty" json:"weight,omitempty"`
 	// Hooks inherited from service template
 	Hooks []Hook `yaml:"-" json:"hooks,omitempty"`
 }
@@ -435,8 +437,8 @@ type ServiceTemplate struct {
 	HealthCheck *HealthCheck `yaml:"healthcheck,omitempty"`
 	// Artifacts to collect from the container after test execution
 	Artifacts []ServiceArtifact `yaml:"artifacts,omitempty"`
-	// MaxInstances limits concurrent running instances of this service template (0 = unlimited)
-	MaxInstances int `yaml:"maxInstances,omitempty"`
+	// Weight represents the resource cost of running this service (default 1)
+	Weight int `yaml:"weight,omitempty"`
 	// Hooks define actions at specific points in the test lifecycle
 	Hooks []Hook `yaml:"hooks,omitempty"`
 	// FilePath stores the source file path (not from YAML, set by parser)
@@ -493,6 +495,7 @@ func (c *ServiceTemplateCollection) ResolveService(svc Service) (Service, error)
 		WorkingDir:  template.WorkingDir,
 		HealthCheck: template.HealthCheck,
 		Artifacts:   append([]ServiceArtifact{}, template.Artifacts...),
+		Weight:      template.Weight,
 		Hooks:       append([]Hook{}, template.Hooks...),
 	}
 
@@ -522,6 +525,9 @@ func (c *ServiceTemplateCollection) ResolveService(svc Service) (Service, error)
 	}
 	if svc.HealthCheck != nil {
 		resolved.HealthCheck = svc.HealthCheck
+	}
+	if svc.Weight > 0 {
+		resolved.Weight = svc.Weight
 	}
 
 	// Merge environment (override wins)
@@ -632,6 +638,31 @@ type Test struct {
 	Execution   Execution          `yaml:"execution" json:"execution"`
 	Assertions  []Assertion        `yaml:"assertions" json:"assertions"`
 	Teardown    []SetupInstruction `yaml:"teardown,omitempty" json:"teardown,omitempty"`
+}
+
+// Weight returns the total weight of all services in this test.
+// Each service defaults to weight 1 if not specified.
+func (t Test) Weight() int {
+	w := 0
+	for _, svc := range t.Services {
+		if svc.Weight > 0 {
+			w += svc.Weight
+		} else {
+			w += 1
+		}
+	}
+	if w == 0 {
+		w = 1 // test without services has weight 1
+	}
+	return w
+}
+
+// ContainerCount returns the number of Docker containers this test will run.
+func (t Test) ContainerCount() int {
+	if len(t.Services) == 0 {
+		return 1
+	}
+	return len(t.Services)
 }
 
 // CollectHooks gathers all hooks from test services for a given slot, sorted by priority.

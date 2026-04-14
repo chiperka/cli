@@ -16,7 +16,7 @@ var migrateCmd = &cobra.Command{
 	Use:   "migrate <path>",
 	Short: "Migrate kindless .chiperka files to the kind-aware format",
 	Long: `Migrate walks <path> recursively and prepends "kind: test" to every
-.chiperka / .spark file that does not already declare a top-level kind.
+.chiperka file that does not already declare a top-level kind.
 
 The command is idempotent: files that already declare a kind are left
 untouched. Use --dry-run to preview the changes without writing files.`,
@@ -74,16 +74,16 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 }
 
 // migrateFile dispatches by suffix and falls through silently for anything
-// that is not a .chiperka / .spark file.
+// that is not a .chiperka file.
 func migrateFile(path string, stats *migrationStats) error {
 	base := filepath.Base(path)
-	if !strings.HasSuffix(base, ".chiperka") && !strings.HasSuffix(base, ".spark") {
+	if !strings.HasSuffix(base, ".chiperka") {
 		return nil
 	}
 	return migrateKindlessTestFile(path, stats)
 }
 
-// migrateKindlessTestFile prepends "kind: test" to a .chiperka/.spark file
+// migrateKindlessTestFile prepends "kind: test" to a .chiperka file
 // that does not already declare a top-level kind. Idempotent.
 func migrateKindlessTestFile(path string, stats *migrationStats) error {
 	stats.filesScanned++

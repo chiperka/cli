@@ -45,7 +45,6 @@ Key flags:
   --html dir          Generate HTML reports to directory
   --junit file        Generate JUnit XML report
   --verbose           Detailed log output
-  --workers N         Parallel workers (0=auto)
   --timeout N         Seconds per test (default 300)
 
 ### chiperka validate [path]

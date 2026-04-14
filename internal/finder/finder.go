@@ -9,10 +9,8 @@ import (
 )
 
 const (
-	// TestFileSuffix is the primary suffix for test definition files.
+	// TestFileSuffix is the suffix for test and service definition files.
 	TestFileSuffix = ".chiperka"
-	// LegacyTestFileSuffix is the legacy suffix (still supported).
-	LegacyTestFileSuffix = ".spark"
 )
 
 // Finder discovers test files in a directory tree.
@@ -42,8 +40,7 @@ func (f *Finder) FindTestFiles() ([]string, error) {
 			return nil
 		}
 
-		// Check if file matches either .chiperka or .spark pattern
-		if strings.HasSuffix(info.Name(), TestFileSuffix) || strings.HasSuffix(info.Name(), LegacyTestFileSuffix) {
+		if strings.HasSuffix(info.Name(), TestFileSuffix) {
 			files = append(files, path)
 		}
 
