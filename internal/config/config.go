@@ -19,10 +19,19 @@ import (
 // envVarPattern matches environment variables with $CHIPERKA_ prefix.
 var envVarPattern = regexp.MustCompile(`\$CHIPERKA_[A-Za-z0-9_]+`)
 
+// envVarSkipPattern matches CHIPERKA_REPORT_* variables that are set at
+// runtime by the report system, not at config-load time. These must not
+// be expanded when parsing chiperka.yaml because they don't exist yet.
+var envVarSkipPattern = regexp.MustCompile(`^CHIPERKA_REPORT_`)
+
 // expandEnvVars replaces all $CHIPERKA_* patterns with their environment variable values.
+// Variables matching CHIPERKA_REPORT_* are skipped — they are injected at runtime.
 func expandEnvVars(data []byte) []byte {
 	return envVarPattern.ReplaceAllFunc(data, func(match []byte) []byte {
 		varName := string(match[1:]) // Remove the $ prefix
+		if envVarSkipPattern.Match([]byte(varName)) {
+			return match // keep as-is for runtime expansion
+		}
 		return []byte(os.Getenv(varName))
 	})
 }
