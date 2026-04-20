@@ -35,12 +35,21 @@ func contextTool() mcp.Tool {
 
 func listTool() mcp.Tool {
 	return mcp.NewTool("chiperka_list",
-		mcp.WithDescription("List resources by kind: test, service, or endpoint. Returns a compact summary for each item."),
+		mcp.WithDescription("List resources by kind: test, service, or endpoint. Returns a compact summary for each item. Use filter to narrow results by name pattern."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithString("kind",
 			mcp.Description("Resource kind: test, service, or endpoint"),
 			mcp.Required(),
+		),
+		mcp.WithString("filter",
+			mcp.Description("Name pattern filter (supports * wildcard). Matches against test name, suite name, or endpoint name."),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("Maximum number of items to return (default: all)"),
+		),
+		mcp.WithNumber("offset",
+			mcp.Description("Number of items to skip (default: 0). Use with limit for pagination."),
 		),
 	)
 }
@@ -134,6 +143,15 @@ func handleList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 	if kind == "" {
 		return nil, fmt.Errorf("kind is required")
 	}
+	filter, _ := request.GetArguments()["filter"].(string)
+	limit := -1
+	if l, ok := request.GetArguments()["limit"].(float64); ok && l > 0 {
+		limit = int(l)
+	}
+	offset := 0
+	if o, ok := request.GetArguments()["offset"].(float64); ok && o > 0 {
+		offset = int(o)
+	}
 
 	parsed, err := discovery.AllWithConfig(defaultConfigFile)
 	if err != nil {
@@ -142,11 +160,23 @@ func handleList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTool
 
 	switch kind {
 	case "test":
-		return jsonResult(discovery.ListTests(parsed))
+		items := discovery.ListTests(parsed)
+		if filter != "" {
+			items = filterTests(items, filter)
+		}
+		return jsonResult(paginate(items, offset, limit))
 	case "service":
-		return jsonResult(discovery.ListServices(parsed))
+		items := discovery.ListServices(parsed)
+		if filter != "" {
+			items = filterServices(items, filter)
+		}
+		return jsonResult(paginate(items, offset, limit))
 	case "endpoint":
-		return jsonResult(discovery.ListEndpoints(parsed))
+		items := discovery.ListEndpoints(parsed)
+		if filter != "" {
+			items = filterEndpoints(items, filter)
+		}
+		return jsonResult(paginate(items, offset, limit))
 	default:
 		return nil, fmt.Errorf("unknown kind %q (expected test, service, or endpoint)", kind)
 	}
@@ -903,6 +933,89 @@ func parseTags(s string) []string {
 		}
 	}
 	return tags
+}
+
+// paginate applies offset and limit to a slice. Returns a wrapper with total count.
+func paginate[T any](items []T, offset, limit int) map[string]interface{} {
+	total := len(items)
+	if offset > 0 {
+		if offset >= len(items) {
+			items = nil
+		} else {
+			items = items[offset:]
+		}
+	}
+	if limit > 0 && limit < len(items) {
+		items = items[:limit]
+	}
+	if items == nil {
+		items = []T{}
+	}
+	return map[string]interface{}{
+		"total": total,
+		"items": items,
+	}
+}
+
+// wildcardMatch does case-insensitive glob matching with * wildcards.
+func wildcardMatch(name, pattern string) bool {
+	pattern = strings.ToLower(pattern)
+	name = strings.ToLower(name)
+	if pattern == "*" {
+		return true
+	}
+	if !strings.Contains(pattern, "*") {
+		return strings.Contains(name, pattern)
+	}
+	parts := strings.Split(pattern, "*")
+	pos := 0
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		idx := strings.Index(name[pos:], part)
+		if idx == -1 {
+			return false
+		}
+		if i == 0 && !strings.HasPrefix(pattern, "*") && idx != 0 {
+			return false
+		}
+		pos += idx + len(part)
+	}
+	if !strings.HasSuffix(pattern, "*") && len(parts) > 0 && parts[len(parts)-1] != "" {
+		return strings.HasSuffix(name, parts[len(parts)-1])
+	}
+	return true
+}
+
+func filterTests(items []discovery.ListTest, pattern string) []discovery.ListTest {
+	var filtered []discovery.ListTest
+	for _, item := range items {
+		if wildcardMatch(item.Name, pattern) || wildcardMatch(item.Suite, pattern) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+func filterServices(items []discovery.ListService, pattern string) []discovery.ListService {
+	var filtered []discovery.ListService
+	for _, item := range items {
+		if wildcardMatch(item.Name, pattern) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+func filterEndpoints(items []discovery.ListEndpoint, pattern string) []discovery.ListEndpoint {
+	var filtered []discovery.ListEndpoint
+	for _, item := range items {
+		if wildcardMatch(item.Name, pattern) || wildcardMatch(item.URL, pattern) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
 }
 
 // jsonResult marshals v to JSON and returns it as a text result.

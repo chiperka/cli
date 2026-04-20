@@ -23,21 +23,52 @@ Then you run `chiperka mcp`. That starts a Model Context Protocol server that ex
 
 ## What a `.chiperka` file looks like
 
-Drop this anywhere in your repo as `tests/login.chiperka` (or whatever path makes sense):
+Every `.chiperka` file has a `kind:` field that declares what it is. There are three kinds:
+
+### Endpoint — what your service exposes
 
 ```yaml
+kind: endpoint
+name: login
+service: api
+method: POST
+url: /auth/login
+inputs:
+  - name: email
+    type: string
+    required: true
+  - name: password
+    type: string
+    required: true
+```
+
+Endpoints declare *what can be called* — the service, method, URL, and expected inputs. They carry no concrete data. Think of them as the contract.
+
+### Service — how to run it
+
+```yaml
+kind: service
+name: api
+image: ghcr.io/myorg/api:latest
+environment:
+  DB_URL: postgres://db:5432/test
+healthcheck:
+  test: "curl -f http://localhost:8080/health"
+  retries: 30
+```
+
+Service templates are reusable Docker service definitions. Tests reference them with `ref:`.
+
+### Test — a concrete invocation with assertions
+
+```yaml
+kind: test
 name: auth
 tests:
   - name: login-with-valid-credentials
     tags: [smoke, auth]
     services:
-      - name: api
-        image: ghcr.io/myorg/api:latest
-        environment:
-          DB_URL: postgres://db:5432/test
-        healthcheck:
-          test: "curl -f http://localhost:8080/health"
-          retries: 30
+      - ref: api
     setup:
       - http:
           target: http://api:8080
@@ -57,9 +88,9 @@ tests:
           statusCode: 200
 ```
 
-A real project usually has many such files — `auth.chiperka`, `users.chiperka`, `billing.chiperka`, one per area. The whole corpus is your specification. Chiperka discovers them automatically by walking the repo.
+A real project usually has many such files — organized by area. The whole corpus is your runnable specification. Chiperka discovers them automatically by walking the repo.
 
-You can also drop a small `.chiperka/chiperka.yaml` in the repo root for **CLI configuration** — execution variables and similar cross-run settings. It's optional, and it does not declare any project resources. Services and tests both live in `.chiperka` files; `chiperka.yaml` is just for the runner.
+You can also drop a small `.chiperka/chiperka.yaml` in the repo root for **CLI configuration** — discovery paths, report configuration, and similar cross-run settings. It's optional and does not declare any project resources.
 
 ---
 
@@ -119,13 +150,15 @@ The `--configuration` flag is optional — it just tells Chiperka where the shar
 Once connected, the agent can call:
 
 - **`chiperka_context`** — get the AI-readable tool reference and project overview
-- **`chiperka_list`** — discover every `.chiperka` file the repo contains
-- **`chiperka_read`** — read a `.chiperka` file as structured JSON, so the agent knows exactly what services and assertions it declares
-- **`chiperka_validate`** — validate a file without running it
-- **`chiperka_execute`** — run an inline scenario provided by the agent itself (great for "what if I send this?" experiments)
-- **`chiperka_run`** — execute one or more `.chiperka` files end-to-end and return structured results
+- **`chiperka_list(kind)`** — list all endpoints, tests, or services in the project
+- **`chiperka_get(kind, name)`** — read full detail of a single resource
+- **`chiperka_validate`** — validate files without running them
+- **`chiperka_execute`** — run an inline scenario (great for "what if I send this?" experiments)
+- **`chiperka_run`** — execute tests end-to-end and return structured results
+- **`chiperka_read_runs/run/test/artifact`** — drill into stored results progressively
+- **`chiperka_report_*`** — generate and read reports (HTML, JUnit, custom)
 
-Every run produces a structured record the agent can reference in later calls, so it doesn't have to re-burn context tokens reasoning about something it already saw.
+The agent workflow: list endpoints to see what exists, compare with tests to find coverage gaps, write new tests, run them, analyze results, and iterate — all autonomously.
 
 ---
 
@@ -160,15 +193,13 @@ Requires Docker on the host. Chiperka orchestrates real containers — no mocks,
 ## How it works
 
 ```
-1. Someone on your team writes a few .chiperka files describing real
-   scenarios the service supports, and commits them to the repo.
+1. Your team writes .chiperka files: endpoints (what the service exposes),
+   services (how to run them), and tests (concrete invocations with assertions).
 2. Anyone who clones the repo runs `chiperka mcp`.
-3. Their AI agent connects via MCP, discovers every .chiperka file, and
-   reads them as structured data.
-4. When the user asks a question, the agent picks the relevant scenarios,
-   runs them against real Docker services, and reads the actual output.
-5. The agent answers with facts from a real run, not guesses from static
-   code reading.
+3. Their AI agent connects via MCP, discovers all endpoints, services, and tests.
+4. The agent lists endpoints, finds ones without tests, writes tests,
+   runs them against real Docker services, and iterates until coverage is complete.
+5. Results are facts from real runs, not guesses from static code reading.
 ```
 
 The files are **manually written**, live in **git**, and are **reviewed in PRs**. No auto-discovery. No magic. One person on the team writes them; everyone — humans and agents — benefits forever.
