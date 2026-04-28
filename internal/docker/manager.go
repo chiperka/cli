@@ -793,6 +793,136 @@ func (m *Manager) RunInNetworkWithFiles(ctx context.Context, image string, comma
 	return stdoutBuf.Bytes(), nil
 }
 
+// RunInNetworkAndCopyOut executes a command in the isolated network and, after
+// the container finishes, extracts the contents of outPaths from the container
+// filesystem. Use this when the command produces binary output that must not
+// pass through Docker's logging driver (which would mangle invalid UTF-8 byte
+// sequences via the json-file driver).
+//
+// inFiles are tar-copied into the container before start (same shape as
+// RunInNetworkWithFiles: keys are paths relative to /). outPaths are absolute
+// container paths whose contents are copied out and returned in outFiles, keyed
+// by the requested path. Missing outPaths are silently omitted.
+func (m *Manager) RunInNetworkAndCopyOut(ctx context.Context, image string, command []string, inFiles map[string][]byte, outPaths []string) (stdout []byte, outFiles map[string][]byte, err error) {
+	cfg := &container.Config{
+		Image: image,
+		Cmd:   command,
+	}
+	hostCfg := &container.HostConfig{
+		NetworkMode: container.NetworkMode(m.networkName),
+	}
+
+	if err := acquireContainerSlot(ctx); err != nil {
+		return nil, nil, fmt.Errorf("failed to acquire container slot: %w", err)
+	}
+	resp, err := dockerClient.ContainerCreate(ctx, cfg, hostCfg, nil, nil, "")
+	if err != nil {
+		releaseContainerSlot()
+		return nil, nil, fmt.Errorf("failed to create container: %w", err)
+	}
+	defer dockerClient.ContainerRemove(context.Background(), resp.ID, container.RemoveOptions{Force: true, RemoveVolumes: true})
+
+	if len(inFiles) > 0 {
+		var tarBuf bytes.Buffer
+		tw := tar.NewWriter(&tarBuf)
+		for path, content := range inFiles {
+			if err := tw.WriteHeader(&tar.Header{
+				Name: path,
+				Mode: 0644,
+				Size: int64(len(content)),
+			}); err != nil {
+				releaseContainerSlot()
+				return nil, nil, fmt.Errorf("failed to write tar header: %w", err)
+			}
+			if _, err := tw.Write(content); err != nil {
+				releaseContainerSlot()
+				return nil, nil, fmt.Errorf("failed to write tar content: %w", err)
+			}
+		}
+		if err := tw.Close(); err != nil {
+			releaseContainerSlot()
+			return nil, nil, fmt.Errorf("failed to close tar: %w", err)
+		}
+		if err := dockerClient.CopyToContainer(ctx, resp.ID, "/", &tarBuf, container.CopyToContainerOptions{}); err != nil {
+			releaseContainerSlot()
+			return nil, nil, fmt.Errorf("failed to copy files to container: %w", err)
+		}
+	}
+
+	if err := dockerClient.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		releaseContainerSlot()
+		return nil, nil, err
+	}
+	releaseContainerSlot()
+
+	statusCh, errCh := dockerClient.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	var exitCode int64
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return nil, nil, err
+		}
+	case status := <-statusCh:
+		exitCode = status.StatusCode
+	}
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	logReader, logErr := retryDockerCall(ctx, "ContainerLogs", m.events, m.testName, func() (io.ReadCloser, error) {
+		return dockerClient.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true, ShowStderr: true})
+	})
+	if logErr == nil {
+		stdcopy.StdCopy(&stdoutBuf, &stderrBuf, logReader)
+		logReader.Close()
+	}
+
+	outFiles = make(map[string][]byte, len(outPaths))
+	for _, p := range outPaths {
+		data, copyErr := copyFileFromContainer(ctx, resp.ID, p)
+		if copyErr != nil {
+			continue
+		}
+		outFiles[p] = data
+	}
+
+	if exitCode != 0 {
+		if stderrBuf.Len() > 0 {
+			return stdoutBuf.Bytes(), outFiles, fmt.Errorf("exit code %d: %s", exitCode, stderrBuf.String())
+		}
+		return stdoutBuf.Bytes(), outFiles, fmt.Errorf("exit code %d", exitCode)
+	}
+	return stdoutBuf.Bytes(), outFiles, nil
+}
+
+// copyFileFromContainer extracts a single regular file from a stopped or
+// running container. Returns os.ErrNotExist-equivalent when the path is
+// missing or not a regular file.
+func copyFileFromContainer(ctx context.Context, containerID, path string) ([]byte, error) {
+	reader, _, err := dockerClient.CopyFromContainer(ctx, containerID, path)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	tr := tar.NewReader(reader)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			return nil, fmt.Errorf("file %q not found in container", path)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read tar entry: %w", err)
+		}
+		if header.Typeflag != tar.TypeReg {
+			continue
+		}
+		data, err := io.ReadAll(tr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read tar content: %w", err)
+		}
+		return data, nil
+	}
+}
+
 // Cleanup stops all containers and removes the network.
 func (m *Manager) Cleanup(ctx context.Context) {
 	m.CleanupWithArtifacts(ctx, nil, "")

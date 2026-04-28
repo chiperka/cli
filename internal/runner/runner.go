@@ -1559,20 +1559,29 @@ func (r *Runner) saveCLIOutputArtifact(uuid, filename string, content []byte) *m
 }
 
 // executeHTTPInNetwork runs an HTTP request from inside the isolated Docker network.
+//
+// curl writes the response body and headers to files inside the container, and
+// only the status code is read from stdout. Stdout would otherwise traverse
+// Docker's json-file logging driver, which mangles invalid UTF-8 byte sequences
+// in binary responses (e.g. application/pdf) by replacing them with U+FFFD —
+// corrupting snapshots and artifacts.
 func (r *Runner) executeHTTPInNetwork(ctx context.Context, execution model.Execution, dockerManager *docker.Manager, uuid string, suiteFilePath string) (*executor.HTTPResponse, error) {
 	reqBody := execution.Request.Body
 
-	// Read files for file/multipart body modes
-	var files map[string][]byte
+	const (
+		respBodyPath    = "/tmp/chiperka-resp-body"
+		respHeadersPath = "/tmp/chiperka-resp-headers"
+	)
+
+	inFiles := make(map[string][]byte)
 	if reqBody.IsFile() {
 		filePath := filepath.Join(filepath.Dir(suiteFilePath), reqBody.File)
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read body file %q: %w", filePath, err)
 		}
-		files = map[string][]byte{"tmp/chiperka-body": content}
+		inFiles["tmp/chiperka-body"] = content
 	} else if reqBody.IsMultipart() {
-		files = make(map[string][]byte)
 		for name, field := range reqBody.Multipart {
 			if field.File != "" {
 				filePath := filepath.Join(filepath.Dir(suiteFilePath), field.File)
@@ -1580,20 +1589,19 @@ func (r *Runner) executeHTTPInNetwork(ctx context.Context, execution model.Execu
 				if err != nil {
 					return nil, fmt.Errorf("failed to read multipart file %q for field %q: %w", filePath, name, err)
 				}
-				files[fmt.Sprintf("tmp/chiperka-mp-%s", name)] = content
+				inFiles[fmt.Sprintf("tmp/chiperka-mp-%s", name)] = content
 			}
 		}
 	}
 
-	// Build curl command with header output
 	curlArgs := []string{
-		"-s",                   // Silent mode
-		"-i",                   // Include response headers
-		"-w", "\n%{http_code}", // Output status code at the end
+		"-s",
+		"-o", respBodyPath,
+		"-D", respHeadersPath,
+		"-w", "%{http_code}",
 		"-X", execution.Request.Method,
 	}
 
-	// Add test ID header for artifact collection (e.g., code coverage)
 	curlArgs = append(curlArgs, "-H", fmt.Sprintf("X-Chiperka-Test-Id: %s", uuid))
 
 	// Add headers (skip Content-Type for multipart — curl -F sets it with boundary)
@@ -1604,7 +1612,6 @@ func (r *Runner) executeHTTPInNetwork(ctx context.Context, execution model.Execu
 		curlArgs = append(curlArgs, "-H", fmt.Sprintf("%s: %s", key, value))
 	}
 
-	// Add body arguments
 	if reqBody.Raw != "" {
 		curlArgs = append(curlArgs, "-d", reqBody.Raw)
 	} else if reqBody.IsFile() {
@@ -1627,89 +1634,66 @@ func (r *Runner) executeHTTPInNetwork(ctx context.Context, execution model.Execu
 		}
 	}
 
-	// Build full URL
 	url := execution.Target + execution.Request.URL
 	curlArgs = append(curlArgs, url)
 
-	// Run curl in the network
-	var output []byte
-	var err error
-	if len(files) > 0 {
-		output, err = dockerManager.RunInNetworkWithFiles(ctx, docker.CurlImage(), curlArgs, files)
-	} else {
-		output, err = dockerManager.RunInNetwork(ctx, docker.CurlImage(), curlArgs)
-	}
+	stdout, outFiles, err := dockerManager.RunInNetworkAndCopyOut(
+		ctx, docker.CurlImage(), curlArgs, inFiles, []string{respBodyPath, respHeadersPath},
+	)
 	if err != nil {
-		return nil, fmt.Errorf("curl request failed: %w\n%s", err, string(output))
+		return nil, fmt.Errorf("curl request failed: %w\n%s", err, string(stdout))
 	}
 
-	// Parse output - last line is status code
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) < 1 {
-		return nil, fmt.Errorf("invalid curl output")
-	}
+	return buildHTTPResponseFromCurlFiles(stdout, outFiles[respBodyPath], outFiles[respHeadersPath])
+}
 
-	statusCodeStr := lines[len(lines)-1]
-	statusCode, err := strconv.Atoi(statusCodeStr)
+// buildHTTPResponseFromCurlFiles assembles an HTTPResponse from the three pieces
+// curl produces when invoked with `-w "%{http_code}" -o <body> -D <headers>`:
+// the status code on stdout, the body file contents, and the headers file
+// contents. Body bytes are passed through verbatim — no string round-trip.
+func buildHTTPResponseFromCurlFiles(stdout, bodyFile, headersFile []byte) (*executor.HTTPResponse, error) {
+	statusCode, err := strconv.Atoi(strings.TrimSpace(string(stdout)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse status code: %w", err)
+		return nil, fmt.Errorf("failed to parse status code from %q: %w", string(stdout), err)
 	}
-
-	// Parse headers and body from -i output
-	// Format: HTTP/1.1 200 OK\r\nHeader: value\r\n\r\nBody
-	// Note: When server sends 100 Continue, output contains multiple HTTP responses.
-	// We must parse from the LAST HTTP/ status line to get the actual response.
-	headers := make(http.Header)
-	body := ""
-
-	contentLines := lines[:len(lines)-1]
-	content := strings.Join(contentLines, "\n")
-
-	// Find the last HTTP/ status line to skip intermediate responses (e.g. 100 Continue)
-	lastHTTPIdx := strings.LastIndex(content, "HTTP/")
-	if lastHTTPIdx > 0 {
-		content = content[lastHTTPIdx:]
-	}
-
-	// Find the empty line that separates headers from body
-	headerBodySplit := strings.Index(content, "\r\n\r\n")
-	if headerBodySplit == -1 {
-		headerBodySplit = strings.Index(content, "\n\n")
-	}
-
-	if headerBodySplit != -1 {
-		headerSection := content[:headerBodySplit]
-		body = content[headerBodySplit:]
-		// Remove leading \r\n\r\n or \n\n
-		body = strings.TrimPrefix(body, "\r\n\r\n")
-		body = strings.TrimPrefix(body, "\n\n")
-
-		// Parse headers
-		headerLines := strings.Split(headerSection, "\n")
-		for _, line := range headerLines {
-			line = strings.TrimRight(line, "\r")
-			// Skip the status line (HTTP/1.1 200 OK)
-			if strings.HasPrefix(line, "HTTP/") {
-				continue
-			}
-			// Parse header
-			colonIdx := strings.Index(line, ":")
-			if colonIdx > 0 {
-				name := strings.TrimSpace(line[:colonIdx])
-				value := strings.TrimSpace(line[colonIdx+1:])
-				headers[name] = append(headers[name], value)
-			}
-		}
-	} else {
-		// No headers found, everything is body
-		body = content
-	}
-
 	return &executor.HTTPResponse{
 		StatusCode: statusCode,
-		Headers:    headers,
-		Body:       []byte(body),
+		Headers:    parseCurlHeaderDump(headersFile),
+		Body:       bodyFile,
 	}, nil
+}
+
+// parseCurlHeaderDump parses the headers file produced by `curl -D <file>`.
+// The file contains one or more HTTP response header blocks separated by blank
+// lines (e.g. when the server sends 100 Continue followed by the real
+// response). The last block is the one we care about. Each block starts with a
+// status line (HTTP/X.Y NNN ...) and is followed by Name: Value lines.
+func parseCurlHeaderDump(data []byte) http.Header {
+	headers := make(http.Header)
+	if len(data) == 0 {
+		return headers
+	}
+
+	text := string(data)
+	lastHTTPIdx := strings.LastIndex(text, "HTTP/")
+	if lastHTTPIdx > 0 {
+		text = text[lastHTTPIdx:]
+	}
+
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if line == "" || strings.HasPrefix(line, "HTTP/") {
+			continue
+		}
+		colonIdx := strings.Index(line, ":")
+		if colonIdx <= 0 {
+			continue
+		}
+		name := strings.TrimSpace(line[:colonIdx])
+		value := strings.TrimSpace(line[colonIdx+1:])
+		headers[name] = append(headers[name], value)
+	}
+	return headers
 }
 
 // collectAllImages collects all Docker images used in tests for pre-warming.
