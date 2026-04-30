@@ -28,7 +28,10 @@ func NewClient(baseURL, token string) *Client {
 		baseURL: baseURL,
 		token:   token,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			// Generous default — CreateRun and report downloads can be slow on large
+			// suites where the server fans out many DB writes per test. Snapshot
+			// upload still uses its own dedicated client below.
+			Timeout: 5 * time.Minute,
 		},
 	}
 }
