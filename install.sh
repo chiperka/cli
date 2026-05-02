@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-REPO="chiperka/chiperka"
+REPO="chiperka/cli"
 INSTALL_DIR="/usr/local/bin"
 BINARY="chiperka"
 

@@ -174,7 +174,7 @@ brew install chiperka
 **Script**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chiperka/chiperka/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/chiperka/cli/main/install.sh | sh
 ```
 
 **Docker**
