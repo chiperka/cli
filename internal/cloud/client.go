@@ -72,6 +72,27 @@ type CreateRunRequest struct {
 	Suites    []SuiteSubmission `json:"suites"`
 	Config    *RunConfig        `json:"config,omitempty"`
 	ProjectID *int64            `json:"project_id,omitempty"`
+	// RegistryAuth lets the workers pull private images with the submitter's credentials
+	// (e.g. a CI job token). The hub keeps them in memory only for the lifetime of the run.
+	RegistryAuth []RegistryAuth `json:"registry_auth,omitempty"`
+}
+
+// RegistryAuth holds credentials for pulling images from Host.
+type RegistryAuth struct {
+	Host     string `json:"host"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// RegistryAuthFromEnv returns the CHIPERKA_REGISTRY_HOST/USER/PASSWORD credentials, or nil if any is missing.
+func RegistryAuthFromEnv() []RegistryAuth {
+	host := os.Getenv("CHIPERKA_REGISTRY_HOST")
+	user := os.Getenv("CHIPERKA_REGISTRY_USER")
+	pass := os.Getenv("CHIPERKA_REGISTRY_PASSWORD")
+	if host == "" || user == "" || pass == "" {
+		return nil
+	}
+	return []RegistryAuth{{Host: host, Username: user, Password: pass}}
 }
 
 // SuiteSubmission represents a pre-parsed suite.
@@ -478,7 +499,8 @@ func BuildSubmission(tests *model.TestCollection, services *model.ServiceTemplat
 		Config: &RunConfig{
 			Version: version,
 		},
-		ProjectID: projectID,
+		ProjectID:    projectID,
+		RegistryAuth: RegistryAuthFromEnv(),
 	}
 
 	for _, suite := range tests.Suites {
